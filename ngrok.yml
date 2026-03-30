@@ -1,0 +1,10 @@
+version: "2"
+authtoken: "<your-ngrok-authtoken>"
+tunnels:
+  frontend:
+    proto: http
+    addr: 8080
+    domain: arlen-microseismical-daintily.ngrok-free.dev
+  backend:
+    proto: http
+    addr: 3002

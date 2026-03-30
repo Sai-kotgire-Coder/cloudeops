@@ -1,0 +1,281 @@
+// Prisma Schema for CloudOps Simulator
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User account and authentication
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  otpCode      String?   @map("otp_code")
+  otpExpiry    DateTime? @map("otp_expiry")
+  isVerified   Boolean   @default(false) @map("is_verified")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  applications Application[]
+  instances    Instance[]
+  containers   Container[]
+  pipelines    Pipeline[]
+  userProgress UserProgress[]
+  images       DockerImage[]
+  tickets      Ticket[]
+  scenarios    Scenario[]
+  dashboardState DashboardState[]
+  networkingState NetworkingState[]
+  alerts       Alert[]
+
+  @@map("users")
+}
+
+// Applications created by users
+model Application {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  name      String
+  type      String?
+  status    String   @default("running")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("applications")
+}
+
+// Cloud instances
+model Instance {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  name      String
+  type      String
+  status    String   @default("running")
+  cpu       Int      @default(2)
+  memory    Int      @default(4)
+  region    String   @default("us-east-1")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("instances")
+}
+
+// Docker containers
+model Container {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  name        String
+  image       String
+  status      String   @default("running")
+  port        String?
+  cpuUsage    Float    @default(0) @map("cpu_usage")
+  memoryUsage Float    @default(0) @map("memory_usage")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("containers")
+}
+
+// Docker images built by users
+model DockerImage {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  name       String
+  tag        String   @default("latest")
+  size       String?
+  dockerfile String?  @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("docker_images")
+}
+
+// CI/CD Pipelines
+model Pipeline {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  name      String
+  status    String   @default("pending")
+  branch    String   @default("main")
+  steps     Json?    @db.JsonB
+  logs      String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("pipelines")
+}
+
+// User learning progress
+model UserProgress {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  module       String // docker, k8s, cicd, iam, etc.
+  progressJson Json     @map("progress_json") @db.JsonB
+  completed    Boolean  @default(false)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, module])
+  @@index([userId])
+  @@map("user_progress")
+}
+
+// DevOps Tickets and Incidents
+model Ticket {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  ticketNumber    String   @unique @map("ticket_number") // TK-0001 format
+  title           String
+  description     String   @db.Text
+  type            String // incident, alert, task, change_request
+  priority        String // critical, high, medium, low
+  status          String   @default("open") // open, in_progress, resolved, closed
+  category        String? // cpu, memory, scaling, deployment, network, pod, service
+  affectedService String?  @map("affected_service")
+  sourceEvent     String?  @map("source_event") @db.Text // JSON of the event that triggered this
+  metricsSnapshot Json?    @map("metrics_snapshot") @db.JsonB
+  suggestedFix    String?  @map("suggested_fix") @db.Text
+  actionTaken     String?  @map("action_taken") @db.Text
+  assignedTo      String?  @map("assigned_to")
+  resolvedAt      DateTime? @map("resolved_at")
+  closedAt        DateTime? @map("closed_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activities      TicketActivity[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([priority])
+  @@map("tickets")
+}
+
+// Ticket activity log
+model TicketActivity {
+  id          String   @id @default(uuid())
+  ticketId    String   @map("ticket_id")
+  action      String // created, assigned, status_changed, comment_added, resolved, etc.
+  description String   @db.Text
+  metadata    Json?    @db.JsonB
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@map("ticket_activities")
+}
+
+// Game Scenarios
+model Scenario {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  name        String
+  type        String // traffic-spike, security-breach, cost-optimization, etc.
+  status      String   @default("not_started") // not_started, in_progress, completed, failed
+  progress    Int      @default(0) // 0-100
+  score       Int?
+  startedAt   DateTime? @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@map("scenarios")
+}
+
+// Dashboard State (metrics and stats)
+model DashboardState {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  traffic      Int      @default(0)
+  cost         Float    @default(0)
+  healthScore  Int      @default(100) @map("health_score")
+  activeAlerts Int      @default(0) @map("active_alerts")
+  uptimePercent Float   @default(100) @map("uptime_percent")
+  metricsData  Json?    @map("metrics_data") @db.JsonB // historical metrics
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId])
+  @@index([userId])
+  @@map("dashboard_state")
+}
+
+//  Networking State (ingress, services, pods)
+model NetworkingState {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  ingressCount Int      @default(0) @map("ingress_count")
+  serviceCount Int      @default(0) @map("service_count")
+  podCount     Int      @default(0) @map("pod_count")
+  traffic      Int      @default(0)
+  bandwidth    Float    @default(0) // Mbps
+  configurations Json?  @db.JsonB // detailed network configurations
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId])
+  @@index([userId])
+  @@map("networking_state")
+}
+
+// Alerts and Issues
+model Alert {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  type        String // cpu, memory, disk, network, security, etc.
+  severity    String // critical, high, medium, low
+  message     String   @db.Text
+  source      String? // which service/instance triggered it
+  status      String   @default("active") // active, acknowledged, resolved
+  metadata    Json?    @db.JsonB
+  acknowledgedAt DateTime? @map("acknowledged_at")
+  resolvedAt  DateTime? @map("resolved_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([status])
+  @@index([severity])
+  @@map("alerts")
+}

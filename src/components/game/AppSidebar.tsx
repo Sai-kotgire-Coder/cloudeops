@@ -1,0 +1,147 @@
+import { Server, GitBranch, Activity, Terminal, Ticket, AlertTriangle, Zap, Layers, Target, Container, LogOut, User, Network } from 'lucide-react';
+import { NavLink } from '@/components/NavLink';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { useAuthStore } from '@/store/authStore';
+import { useAlertStore } from '@/store/alertStore';
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarHeader,
+  SidebarFooter,
+  useSidebar,
+} from '@/components/ui/sidebar';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+
+const menuItems = [
+  { title: 'Dashboard', url: '/', icon: Activity },
+  { title: 'Scenarios', url: '/scenarios', icon: Target },
+  { title: 'Applications', url: '/apps', icon: Layers },
+  { title: 'Container Lab', url: '/containers', icon: Container },
+  { title: 'Networking', url: '/networking', icon: Network },
+  { title: 'Instances', url: '/instances', icon: Server },
+  { title: 'CI/CD', url: '/cicd', icon: GitBranch },
+  { title: 'Live Instances', url: '/live', icon: Zap },
+  { title: 'AWS CLI', url: '/cli', icon: Terminal },
+  { title: 'Tickets', url: '/tickets', icon: Ticket },
+  { title: 'Issues', url: '/issues', icon: AlertTriangle },
+];
+
+export function AppSidebar() {
+  const { state } = useSidebar();
+  const collapsed = state === 'collapsed';
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuthStore();
+  const criticalCount = useAlertStore((state) => state.getCriticalCount());
+  const highCount = useAlertStore((state) => state.getHighCount());
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  const urgentAlertsCount = criticalCount + highCount;
+
+  return (
+    <Sidebar collapsible="icon">
+      <SidebarHeader className="p-3 border-b border-sidebar-border">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-md bg-primary/20 flex items-center justify-center flex-shrink-0">
+            <Zap className="w-5 h-5 text-primary" />
+          </div>
+          {!collapsed && (
+            <div>
+              <span className="font-bold text-sm tracking-tight">CloudOps</span>
+              <span className="text-muted-foreground text-xs ml-1">Sim</span>
+            </div>
+          )}
+        </div>
+      </SidebarHeader>
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {menuItems.map((item) => {
+                const isIssues = item.title === 'Issues';
+                const showBadge = isIssues && urgentAlertsCount > 0;
+                
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={location.pathname === item.url}>
+                      <NavLink
+                        to={item.url}
+                        end
+                        className="hover:bg-sidebar-accent/50"
+                        activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
+                      >
+                        <div className="relative flex items-center flex-1">
+                          <item.icon className="mr-2 h-4 w-4" />
+                          {!collapsed && <span>{item.title}</span>}
+                          {!collapsed && showBadge && (
+                            <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white animate-pulse">
+                              {urgentAlertsCount > 9 ? '9+' : urgentAlertsCount}
+                            </span>
+                          )}
+                          {collapsed && showBadge && (
+                            <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-red-500 animate-pulse">
+                              <span className="sr-only">{urgentAlertsCount} urgent alerts</span>
+                            </span>
+                          )}
+                        </div>
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+      <SidebarFooter className="p-3 border-t border-sidebar-border">
+        {!collapsed ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="w-full justify-start px-2">
+                <User className="mr-2 h-4 w-4" />
+                <span className="text-sm truncate">{user?.email}</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuLabel>My Account</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleLogout}>
+                <LogOut className="mr-2 h-4 w-4" />
+                Logout
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleLogout}
+            className="w-8 h-8"
+            title="Logout"
+          >
+            <LogOut className="h-4 w-4" />
+          </Button>
+        )}
+      </SidebarFooter>
+    </Sidebar>
+  );
+}
