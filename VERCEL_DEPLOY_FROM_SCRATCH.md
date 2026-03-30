@@ -72,7 +72,22 @@ Add these in the backend Vercel project settings before the final production dep
 - `EMAIL_FROM`
 - `NODE_ENV=production`
 
-Set `CORS_ORIGIN` to your frontend Vercel URL, for example:
+If you have not deployed the frontend yet, set `CORS_ORIGIN` to a wildcard pattern that matches your future Vercel frontend project name.
+
+For your repository/project name, this is a good first value:
+
+```bash
+https://cloudeops*.vercel.app
+```
+
+This will allow both:
+
+- `https://cloudeops.vercel.app`
+- Vercel preview URLs such as `https://cloudeops-git-main-...vercel.app`
+
+After the frontend is deployed, you can keep that wildcard or tighten it to the exact production URL.
+
+Exact example:
 
 ```bash
 https://cloud-simulator.vercel.app

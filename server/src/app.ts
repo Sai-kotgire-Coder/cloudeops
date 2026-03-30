@@ -16,12 +16,28 @@ import gameStateRoutes from './routes/gameState.js';
 
 const app = express();
 
+const configuredOrigins = (process.env.CORS_ORIGIN || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 const allowedOrigins = [
   'http://localhost:8080',
   'http://localhost:5173',
   'https://arlen-microseismical-daintily.ngrok-free.dev',
-  process.env.CORS_ORIGIN
+  ...configuredOrigins
 ].filter(Boolean) as string[];
+
+const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const matchesAllowedOrigin = (origin: string, allowedOrigin: string) => {
+  if (allowedOrigin.includes('*')) {
+    const pattern = `^${allowedOrigin.split('*').map(escapeRegex).join('.*')}$`;
+    return new RegExp(pattern).test(origin);
+  }
+
+  return origin === allowedOrigin || origin.startsWith(allowedOrigin);
+};
 
 app.use(cors({
   origin: (origin, callback) => {
@@ -29,7 +45,7 @@ app.use(cors({
       return callback(null, true);
     }
 
-    if (allowedOrigins.some((allowed) => origin.startsWith(allowed))) {
+    if (allowedOrigins.some((allowed) => matchesAllowedOrigin(origin, allowed))) {
       return callback(null, true);
     }
 
