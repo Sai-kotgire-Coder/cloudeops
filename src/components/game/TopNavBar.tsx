@@ -18,7 +18,8 @@ export const TopNavBar = () => {
 
   // Calculate live hourly cost based on active instances
   const currentHourlyCost = instances.reduce((acc, inst) => {
-    return acc + INSTANCE_TYPES[inst.typeId].costPerHour;
+    const instanceType = INSTANCE_TYPES[inst.typeId];
+    return acc + (instanceType?.costPerHour || 0);
   }, 0);
 
   return (
