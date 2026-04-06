@@ -1,12 +1,11 @@
 {
   "version": 2,
-  "buildCommand": "prisma generate",
-  "outputDirectory": ".",
-  "functions": {
-    "api/index.ts": {
-      "runtime": "@vercel/node@5.3.24"
+  "builds": [
+    {
+      "src": "api/index.ts",
+      "use": "@vercel/node"
     }
-  },
+  ],
   "routes": [
     {
       "src": "/(.*)",
