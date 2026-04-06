@@ -1,0 +1,11 @@
+node_modules
+.git
+.env.local
+.env
+bun.lock
+*.md
+.DS_Store
+playwright-fixture.ts
+playwright.config.ts
+test_console.mjs
+vitest.config.ts
