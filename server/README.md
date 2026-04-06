@@ -5,7 +5,7 @@ Production-ready backend with PostgreSQL database and JWT authentication.
 ## 🚀 Quick Start
 
 ### 1. Install Dependencies
-
+this si just to push the code from coder account 
 ```bash
 cd server
 npm install
