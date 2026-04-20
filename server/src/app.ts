@@ -13,6 +13,7 @@ import dashboardRoutes from './routes/dashboard.js';
 import networkingRoutes from './routes/networking.js';
 import alertRoutes from './routes/alerts.js';
 import gameStateRoutes from './routes/gameState.js';
+import paymentRoutes from './routes/payment.js';
 
 const app = express();
 
@@ -81,6 +82,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/networking', networkingRoutes);
 app.use('/api/alerts', alertRoutes);
 app.use('/api/game-state', gameStateRoutes);
+app.use('/api/payment', paymentRoutes);
 
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('Error:', err);

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 import prisma from '../lib/prisma.js';
+import { getUsageLimits } from '../lib/paymentService.js';
 
 const router = Router();
 
@@ -40,25 +41,87 @@ router.post('/', async (req: AuthRequest, res) => {
       assignedInstances
     } = req.body;
 
-    const application = await prisma.application.create({
-      data: {
-        userId: req.userId!,
-        name,
-        type,
-        status: status || 'running',
-        image,
-        port,
-        envVars,
-        strategy: strategy || 'Rolling',
-        requests,
-        healthCheck,
-        activeVersion,
-        deployments: deployments || [],
-        assignedInstances: assignedInstances || []
-      }
-    });
+    // Use transaction to prevent race conditions
+    try {
+      const application = await prisma.$transaction(async (tx) => {
+        // Fetch user within transaction
+        const user = await tx.user.findUnique({
+          where: { id: req.userId! }
+        });
 
-    res.status(201).json(application);
+        if (!user) {
+          throw new Error('User not found');
+        }
+
+        // Get plan status with defaults for backward compatibility
+        const isPro = (user as any).isPro ?? false;
+        const planExpiry = (user as any).planExpiry;
+
+        // Check if plan expired and downgrade if needed
+        let finalIsPro = isPro;
+        if (isPro && planExpiry && new Date() > new Date(planExpiry)) {
+          // Downgrade expired plan
+          await tx.user.update({
+            where: { id: req.userId! },
+            data: { 
+              isPro: false, 
+              planType: 'free', 
+              planExpiry: null 
+            }
+          });
+          finalIsPro = false;
+        }
+
+        // Free users can only create 1 application
+        const isFreeUser = !finalIsPro;
+        if (isFreeUser) {
+          const existingApplications = await tx.application.count({
+            where: { userId: req.userId! }
+          });
+
+          if (existingApplications >= 1) {
+            throw new Error('FREE_PLAN_LIMIT_EXCEEDED');
+          }
+        }
+
+        // Create application within the same transaction
+        const newApplication = await tx.application.create({
+          data: {
+            userId: req.userId!,
+            name,
+            type,
+            status: status || 'running',
+            image,
+            port,
+            envVars,
+            strategy: strategy || 'Rolling',
+            requests,
+            healthCheck,
+            activeVersion,
+            deployments: deployments || [],
+            assignedInstances: assignedInstances || []
+          }
+        });
+
+        return newApplication;
+      });
+
+      res.status(201).json(application);
+    } catch (txError: any) {
+      if (txError.message === 'FREE_PLAN_LIMIT_EXCEEDED') {
+        const limits = getUsageLimits(false);
+        return res.status(403).json({
+          error: 'Upgrade to Pro plan to create more applications',
+          limit: limits.maxApplications,
+          upgradeUrl: '/pricing',
+          isPro: false
+        });
+      }
+      if (txError.message === 'User not found') {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      throw txError;
+    }
   } catch (error) {
     console.error('Create application error:', error);
     res.status(500).json({ error: 'Failed to create application' });

@@ -81,7 +81,22 @@ export default function ManageInstancePage() {
     );
   }
 
-  const typeInfo = INSTANCE_TYPES[instance.typeId];
+  const typeInfo = INSTANCE_TYPES[instance.typeId || (instance as any).type];
+
+  // Safety check for typeInfo
+  if (!typeInfo) {
+    return (
+      <div className="h-screen flex flex-col bg-background">
+        <TopNavBar />
+        <div className="flex-1 flex flex-col items-center justify-center">
+          <AlertTriangle className="w-16 h-16 text-destructive mb-4 opacity-50" />
+          <h2 className="text-xl font-bold">Instance type configuration missing</h2>
+          <p className="text-muted-foreground mb-6">The instance type "{instance.typeId || (instance as any).type}" is not recognized.</p>
+          <Button onClick={() => navigate('/instances')}>Return to Instances</Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden relative w-full">

@@ -17,6 +17,12 @@ model User {
   otpCode      String?   @map("otp_code")
   otpExpiry    DateTime? @map("otp_expiry")
   isVerified   Boolean   @default(false) @map("is_verified")
+  
+  // Plan & Subscription fields
+  planType     String    @default("free") @map("plan_type") // "free" or "pro"
+  isPro        Boolean   @default(false) @map("is_pro")
+  planExpiry   DateTime? @map("plan_expiry") // When pro plan expires
+  
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
@@ -33,6 +39,7 @@ model User {
   networkingState NetworkingState[]
   gameState    GameState?
   alerts       Alert[]
+  payments     Payment[]
 
   @@map("users")
 }
@@ -349,3 +356,29 @@ model Alert {
   @@index([severity])
   @@map("alerts")
 }
+
+// Payment & Subscription
+model Payment {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  razorpayOrderId String   @unique @map("razorpay_order_id")
+  razorpayPaymentId String? @map("razorpay_payment_id")
+  amount          Int      // Amount in paise (e.g., 99900 for ₹999)
+  currency        String   @default("INR")
+  status          String   @default("created") // created, pending, completed, failed
+  planType        String   @default("pro") @map("plan_type")
+  planDurationDays Int     @default(30) @map("plan_duration_days")
+  signature       String? // Razorpay signature for verification
+  errorMessage    String? @db.Text @map("error_message")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([status])
+  @@index([razorpayOrderId])
+  @@map("payments")
+}
+

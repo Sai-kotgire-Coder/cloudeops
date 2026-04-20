@@ -7,6 +7,7 @@ import { ARN_PREFIX } from './iam/types';
 import { useSchedulerStore } from './schedulerStore';
 import { useScenarioStore } from './scenarioStore';
 import { useAlertStore } from './alertStore';
+import { usePaymentStore } from './paymentStore';
 import { apiClient } from '@/lib/apiClient';
 
 const STATE_VERSION = '1.0.0';
@@ -335,16 +336,30 @@ export const useGameStore = create<GameState>()(
       const newInst = createInstance(typeId, 8, maxNum + 1);
       newInst.roleId = roleId;
 
-      set(s => ({ instances: [...s.instances, newInst] }));
-
-      // Save to backend
+      // Try to save to backend first before adding to local store
       try {
         await apiClient.createInstance({
           ...newInst,
           type: newInst.typeId
         });
-      } catch (error) {
+        
+        // Only add to store if backend succeeds
+        set(s => ({ instances: [...s.instances, newInst] }));
+      } catch (error: any) {
         console.error('Failed to create instance in backend:', error);
+        
+        // Check if this is an upgrade required error
+        if (error.statusCode === 403 && error.data?.isPro === false) {
+          // Trigger upgrade modal
+          usePaymentStore.getState().openUpgradeModal(
+            'instance',
+            error.data?.current || 0,
+            error.data?.limit || 1,
+            error.data?.upgradeUrl || '/pricing',
+            false
+          );
+        }
+        // Don't add instance to store on error
       }
     },
 
@@ -359,15 +374,29 @@ export const useGameStore = create<GameState>()(
         ...config
       };
       
-      set(s => ({
-        applications: [...s.applications, newApp]
-      }));
-
-      // Save to backend
+      // Try to save to backend first before adding to local store
       try {
         await apiClient.createApplication(newApp);
-      } catch (error) {
+        
+        // Only add to store if backend succeeds
+        set(s => ({
+          applications: [...s.applications, newApp]
+        }));
+      } catch (error: any) {
         console.error('Failed to create application in backend:', error);
+        
+        // Check if this is an upgrade required error
+        if (error.statusCode === 403 && error.data?.isPro === false) {
+          // Trigger upgrade modal
+          usePaymentStore.getState().openUpgradeModal(
+            'application',
+            error.data?.current || 0,
+            error.data?.limit || 1,
+            error.data?.upgradeUrl || '/pricing',
+            false
+          );
+        }
+        // Don't add application to store on error
       }
     },
     createDeployment: (appId, version, replicas) => set(s => ({

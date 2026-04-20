@@ -7,7 +7,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/game/AppSidebar";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { UpgradeModal } from "@/components/payment/UpgradeModal";
 import { useAuthStore } from "@/store/authStore";
+import { usePaymentStore } from "@/store/paymentStore";
 import Index from "./pages/Index.tsx";
 import ManageInstancePage from "./pages/ManageInstancePage.tsx";
 import InstancesPage from "./pages/InstancesPage.tsx";
@@ -22,6 +24,7 @@ import IAMPage from "./pages/IAMPage.tsx";
 import ScenariosPage from "./pages/ScenariosPage.tsx";
 import ContainerLabPage from "./pages/ContainerLabPage.tsx";
 import NetworkingPage from "./pages/NetworkingPage.tsx";
+import PricingPage from "./pages/PricingPage.tsx";
 import LoginPage from "./pages/LoginPage.tsx";
 import RegisterPage from "./pages/RegisterPage.tsx";
 import VerifyOTPPage from "./pages/VerifyOTPPage.tsx";
@@ -37,6 +40,9 @@ const queryClient = new QueryClient();
 const App = () => {
   const restoreSession = useAuthStore((state) => state.restoreSession);
   const isLoading = useAuthStore((state) => state.isLoading);
+  
+  // Payment/Upgrade modal state
+  const paymentModal = usePaymentStore();
 
   useEffect(() => {
     restoreSession();
@@ -60,6 +66,18 @@ const App = () => {
       <TooltipProvider>
         <Toaster />
         <Sonner />
+        <UpgradeModal 
+          isOpen={paymentModal.isOpen}
+          onClose={() => paymentModal.closeUpgradeModal()}
+          onUpgrade={() => {
+            paymentModal.closeUpgradeModal();
+            // Navigate to pricing page
+            window.location.href = paymentModal.upgradeUrl;
+          }}
+          resourceType={paymentModal.resourceType}
+          current={paymentModal.current}
+          limit={paymentModal.limit}
+        />
         <BrowserRouter>
           <Routes>
             {/* Public routes */}
@@ -82,6 +100,7 @@ const App = () => {
                       <div className="flex-1 flex flex-col min-w-0 pb-16 md:pb-0">
                         <Routes>
                           <Route path="/" element={<Index />} />
+                          <Route path="/pricing" element={<PricingPage />} />
                           <Route path="/apps" element={<ApplicationsPage />} />
                           <Route path="/apps/:id" element={<ManageApplicationPage />} />
                           <Route path="/instances" element={<InstancesPage />} />

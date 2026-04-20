@@ -1,6 +1,20 @@
 // API client for backend communication
 const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3001/api' : '/api');
 
+/**
+ * Custom error class for API responses that preserves metadata
+ */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public statusCode: number = 500,
+    public data?: any
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 export interface User {
   id: string;
   email: string;
@@ -133,8 +147,12 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Request failed' }));
-      throw new Error(error.error || 'Request failed');
+      const errorData = await response.json().catch(() => ({ error: 'Request failed' }));
+      throw new ApiError(
+        errorData.error || 'Request failed',
+        response.status,
+        errorData // Pass all error data (includes limit, upgradeUrl, isPro, etc.)
+      );
     }
 
     return response.json();

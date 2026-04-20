@@ -60,7 +60,12 @@ export async function hydrateUserData() {
 
     // Hydrate GameStore with instances, applications, and game state
     if (instances.status === 'fulfilled' && instances.value) {
-      useGameStore.setState({ instances: instances.value });
+      // Map backend instances to frontend format (type -> typeId)
+      const mappedInstances = instances.value.map((inst: any) => ({
+        ...inst,
+        typeId: inst.type || 't3.micro', // Map 'type' from backend to 'typeId' for frontend
+      }));
+      useGameStore.setState({ instances: mappedInstances });
     }
     if (applications.status === 'fulfilled' && applications.value) {
       useGameStore.setState({ applications: applications.value });

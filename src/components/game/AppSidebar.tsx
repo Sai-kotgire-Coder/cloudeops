@@ -1,4 +1,4 @@
-import { Server, GitBranch, Activity, Terminal, Ticket, AlertTriangle, Zap, Layers, Target, Container, LogOut, User, Network } from 'lucide-react';
+import { Server, GitBranch, Activity, Terminal, Ticket, AlertTriangle, Zap, Layers, Target, Container, LogOut, User, Network, Rocket } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
@@ -38,6 +38,10 @@ const menuItems = [
   { title: 'AWS CLI', url: '/cli', icon: Terminal },
   { title: 'Tickets', url: '/tickets', icon: Ticket },
   { title: 'Issues', url: '/issues', icon: AlertTriangle },
+];
+
+const upgradeSectionItems = [
+  { title: 'Pricing & Plans', url: '/pricing', icon: Rocket, badge: 'Pro' },
 ];
 
 export function AppSidebar() {
@@ -108,6 +112,39 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                 );
               })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupLabel>Upgrade</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {upgradeSectionItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild isActive={location.pathname === item.url}>
+                    <NavLink
+                      to={item.url}
+                      end
+                      className="hover:bg-sidebar-accent/50"
+                      activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
+                    >
+                      <div className="flex items-center flex-1 gap-2">
+                        <item.icon className="h-4 w-4" />
+                        {!collapsed && (
+                          <div className="flex items-center justify-between flex-1">
+                            <span>{item.title}</span>
+                            {item.badge && (
+                              <span className="ml-2 inline-flex items-center rounded-full bg-gradient-to-r from-purple-500 to-pink-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                                {item.badge}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

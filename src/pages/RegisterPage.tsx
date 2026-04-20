@@ -25,6 +25,22 @@ export default function RegisterPage() {
       setValidationError('Password must be at least 8 characters long');
       return false;
     }
+    if (!/[A-Z]/.test(password)) {
+      setValidationError('Password must contain at least one uppercase letter');
+      return false;
+    }
+    if (!/[a-z]/.test(password)) {
+      setValidationError('Password must contain at least one lowercase letter');
+      return false;
+    }
+    if (!/[0-9]/.test(password)) {
+      setValidationError('Password must contain at least one digit');
+      return false;
+    }
+    if (!/[^A-Za-z0-9]/.test(password)) {
+      setValidationError('Password must contain at least one special character (!@#$%^&* etc)');
+      return false;
+    }
     
     if (password !== confirmPassword) {
       setValidationError('Passwords do not match');
@@ -64,6 +80,10 @@ export default function RegisterPage() {
 
   const passwordRequirements = [
     { label: 'At least 8 characters', met: password.length >= 8 },
+    { label: 'Contains uppercase letter (A-Z)', met: /[A-Z]/.test(password) },
+    { label: 'Contains lowercase letter (a-z)', met: /[a-z]/.test(password) },
+    { label: 'Contains digit (0-9)', met: /[0-9]/.test(password) },
+    { label: 'Contains special character (!@#$%^&*)', met: /[^A-Za-z0-9]/.test(password) },
   ];
 
   return (
