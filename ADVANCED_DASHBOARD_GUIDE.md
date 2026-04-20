@@ -125,7 +125,7 @@ Grade: A (90+), B (75-89), C (60-74), D (40-59), F (<40)
 - Well-configured systems
 
 **File:** `src/components/dashboard/EnhancedAIMentor.tsx`
-
+---
 ---
 
 ### 7. **Quick Actions Panel** ⚡
