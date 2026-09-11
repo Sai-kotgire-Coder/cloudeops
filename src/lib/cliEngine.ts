@@ -1,6 +1,7 @@
 import { useGameStore, INSTANCE_TYPES, InstanceTypeId } from '@/store/gameStore';
 import { useIAMStore } from '@/store/iam/iamStore';
 import { evaluatePermission } from '@/store/iam/engine';
+import { executeKubectlCommand, getKubectlAutocompleteSuggestions } from '@/lib/kubectlEngine';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -748,103 +749,16 @@ const cloudopsCommands: CommandDefinition[] = [
 ];
 
 // ============================================================================
-// COMMAND HANDLERS - KUBECTL
-// ============================================================================
-
-const kubectlCommands: CommandDefinition[] = [
-  {
-    name: 'get pods',
-    operation: 'get',
-    description: 'Lists pods in the cluster',
-    usage: 'kubectl get pods [--namespace <ns>]',
-    examples: ['kubectl get pods', 'kubectl get pods --namespace default'],
-    handler: (parsed) => {
-      const { instances } = useGameStore.getState();
-      const allPods = instances.flatMap(inst => inst.pods);
-
-      return {
-        type: 'success',
-        output: formatPodTable(allPods),
-        learningTip: '☸️ Kubernetes (K8s) is a container orchestration platform. kubectl is the command-line tool for managing K8s clusters.',
-        timestamp: Date.now(),
-      };
-    },
-  },
-  {
-    name: 'scale deployment',
-    operation: 'scale',
-    description: 'Sets a new size for a deployment',
-    usage: 'kubectl scale deployment <name> --replicas=<num>',
-    examples: ['kubectl scale deployment app-main --replicas=5'],
-    handler: (parsed) => {
-      const deploymentName = parsed.rawArgs[0];
-      const replicas = parseInt((parsed.flags['replicas'] as string) || '0');
-
-      if (!deploymentName || isNaN(replicas)) {
-        return {
-          type: 'error',
-          output: 'Error: Usage kubectl scale deployment <name> --replicas=<num>',
-          timestamp: Date.now(),
-        };
-      }
-
-      const { applications } = useGameStore.getState();
-      const app = applications.find(a => a.name.toLowerCase().replace(/\s+/g, '-') === deploymentName);
-
-      if (!app) {
-        return {
-          type: 'error',
-          output: `Error: deployment.apps "${deploymentName}" not found`,
-          timestamp: Date.now(),
-        };
-      }
-
-      useGameStore.getState().scaleDeployment(app.id, app.activeVersion, replicas);
-
-      return {
-        type: 'success',
-        output: `deployment.apps/${deploymentName} scaled`,
-        learningTip: '⚖️ Scaling deployments dynamically allows you to adapt to traffic changes. In production, this is often automated with HPA (Horizontal Pod Autoscaler).',
-        timestamp: Date.now(),
-      };
-    },
-  },
-  {
-    name: 'get nodes',
-    operation: 'get',
-    description: 'Lists nodes in the cluster',
-    usage: 'kubectl get nodes',
-    examples: ['kubectl get nodes'],
-    handler: () => {
-      const { instances } = useGameStore.getState();
-
-      const rows = instances.map(i => 
-        `${i.name.toLowerCase().replace(/\s+/g, '-').padEnd(25)} Ready    <none>   ${Math.floor((Date.now() - (i.id.length * 1000)) / 86400000)}d    ${i.typeId}`
-      );
-
-      const header = 'NAME                      STATUS   ROLES    AGE   VERSION';
-      const separator = '-'.repeat(header.length);
-
-      return {
-        type: 'success',
-        output: [header, separator, ...rows].join('\n'),
-        learningTip: '🖥️ In Kubernetes, nodes are the worker machines (VMs or physical servers) that run your containerized applications.',
-        timestamp: Date.now(),
-      };
-    },
-  },
-];
-
-// ============================================================================
 // COMMAND REGISTRY
 // ============================================================================
+// Note: kubectl is handled separately -- see executeKubectlCommand import --
+// so both this page and the dedicated Kubectl Lab share one implementation.
 
 export const commandRegistry = {
   ec2: ec2Commands,
   iam: iamCommands,
   s3: s3Commands,
   cloudops: cloudopsCommands,
-  kubectl: kubectlCommands,
 };
 
 // ============================================================================
@@ -950,9 +864,9 @@ export function getAutocompleteSuggestions(input: string): string[] {
     }
   }
 
-  // "kubectl" -> suggest operations
-  if (parts.length === 1 && parts[0] === 'kubectl') {
-    return ['kubectl get pods', 'kubectl get nodes', 'kubectl scale deployment'];
+  // "kubectl ..." -> delegate to the kubectl engine's own suggestions
+  if (parts[0] === 'kubectl') {
+    return getKubectlAutocompleteSuggestions(trimmed);
   }
 
   // "cloudops" -> suggest operations
@@ -983,6 +897,11 @@ export function executeCommand(input: string): CommandResult {
     return { type: 'info', output: '__CLEAR__', timestamp: Date.now() };
   }
 
+  // kubectl has its own dedicated engine (shared with the Kubectl Lab page)
+  if (trimmed.split(/\s+/)[0] === 'kubectl') {
+    return executeKubectlCommand(trimmed);
+  }
+
   // Parse command
   const parsed = parseCommand(trimmed);
 
@@ -993,7 +912,7 @@ export function executeCommand(input: string): CommandResult {
 
   // Find and execute command
   const commands = commandRegistry[parsed.service as keyof typeof commandRegistry];
-  
+
   if (!commands) {
     return {
       type: 'error',
@@ -1002,10 +921,9 @@ export function executeCommand(input: string): CommandResult {
     };
   }
 
-  const command = commands.find(cmd => 
-    cmd.operation === parsed.operation || 
-    (parsed.service === 'cloudops' && `${parsed.operation} ${parsed.rawArgs[0]}` === cmd.name) ||
-    (parsed.service === 'kubectl' && `${parsed.operation} ${parsed.rawArgs[0]}` === cmd.name)
+  const command = commands.find(cmd =>
+    cmd.operation === parsed.operation ||
+    (parsed.service === 'cloudops' && `${parsed.operation} ${parsed.rawArgs[0]}` === cmd.name)
   );
 
   if (!command) {

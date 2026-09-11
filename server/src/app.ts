@@ -14,8 +14,18 @@ import networkingRoutes from './routes/networking.js';
 import alertRoutes from './routes/alerts.js';
 import gameStateRoutes from './routes/gameState.js';
 import paymentRoutes from './routes/payment.js';
+import terraformRoutes from './routes/terraform.js';
+import ansibleRoutes from './routes/ansible.js';
+import vaultRoutes from './routes/vault.js';
+import gitopsRoutes from './routes/gitops.js';
+import profileRoutes from './routes/profile.js';
 
 const app = express();
+
+// Trust the first proxy hop (e.g. the ngrok tunnel already in the CORS
+// allowlist below) so express-rate-limit reads the real client IP from
+// X-Forwarded-For instead of throwing or rate-limiting everyone as one IP.
+app.set('trust proxy', 1);
 
 const configuredOrigins = (process.env.CORS_ORIGIN || '')
   .split(',')
@@ -83,6 +93,11 @@ app.use('/api/networking', networkingRoutes);
 app.use('/api/alerts', alertRoutes);
 app.use('/api/game-state', gameStateRoutes);
 app.use('/api/payment', paymentRoutes);
+app.use('/api/terraform', terraformRoutes);
+app.use('/api/ansible', ansibleRoutes);
+app.use('/api/vault', vaultRoutes);
+app.use('/api/gitops', gitopsRoutes);
+app.use('/api/profile', profileRoutes);
 
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('Error:', err);

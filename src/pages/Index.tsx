@@ -4,8 +4,6 @@ import { TopNavBar } from '@/components/game/TopNavBar';
 import { MetricsPanel } from '@/components/game/MetricsPanel';
 import { AlertOverlay } from '@/components/game/AlertOverlay';
 import { TutorialOverlay } from '@/components/game/TutorialOverlay';
-import { ScenarioBanner } from '@/components/game/ScenarioBanner';
-import { HintDisplay } from '@/components/scenario/HintDisplay';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Server, GitBranch, Terminal, Ticket, AlertTriangle, Zap, Target, Layers, Container, Network } from 'lucide-react';
@@ -140,8 +138,6 @@ const Index = () => {
         </div>
       </div>
       
-      <ScenarioBanner />
-      <HintDisplay />
       <AlertOverlay />
       <TutorialOverlay />
     </div>

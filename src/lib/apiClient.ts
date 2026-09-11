@@ -123,6 +123,67 @@ class ApiClient {
     return response.json();
   }
 
+  async forgotPassword(email: string): Promise<{ message: string }> {
+    const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to send reset code');
+    }
+
+    return response.json();
+  }
+
+  async resetPassword(email: string, otp: string, newPassword: string): Promise<{ message: string }> {
+    const response = await fetch(`${API_BASE_URL}/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, otp, newPassword }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to reset password');
+    }
+
+    return response.json();
+  }
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<{ message: string; token: string }> {
+    return this.request('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  }
+
+  async logoutAllDevices(): Promise<{ message: string; token: string }> {
+    return this.request('/auth/logout-all', { method: 'POST' });
+  }
+
+  async deleteAccount(password: string): Promise<{ message: string }> {
+    return this.request('/auth/account', {
+      method: 'DELETE',
+      body: JSON.stringify({ password }),
+    });
+  }
+
+  async exportData(): Promise<Blob> {
+    const response = await fetch(`${API_BASE_URL}/auth/export`, {
+      headers: this.getHeaders(),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Export failed' }));
+      throw new Error(error.error || 'Export failed');
+    }
+
+    return response.blob();
+  }
+
   async getCurrentUser(): Promise<User> {
     const response = await fetch(`${API_BASE_URL}/auth/me`, {
       headers: this.getHeaders(),
@@ -148,6 +209,18 @@ class ApiClient {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: 'Request failed' }));
+
+      if (response.status === 401) {
+        // A previously-valid token was rejected -- almost always because its
+        // tokenVersion was revoked elsewhere (password change/reset, or an
+        // explicit "log out of all devices"). Every already-authenticated
+        // call goes through this method, so this is the one place that can
+        // catch it app-wide; a listener (see App.tsx) forces a clean logout
+        // + redirect instead of letting the rest of the app fail silently
+        // request by request.
+        window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+      }
+
       throw new ApiError(
         errorData.error || 'Request failed',
         response.status,
@@ -324,6 +397,72 @@ class ApiClient {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
+  }
+
+  // Terraform
+  async getTerraformWorkspace() {
+    return this.request('/terraform', { method: 'GET' });
+  }
+
+  async updateTerraformWorkspace(data: any) {
+    return this.request('/terraform', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Ansible
+  async getAnsibleWorkspace() {
+    return this.request('/ansible', { method: 'GET' });
+  }
+
+  async updateAnsibleWorkspace(data: any) {
+    return this.request('/ansible', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Vault
+  async getVaultWorkspace() {
+    return this.request('/vault', { method: 'GET' });
+  }
+
+  async updateVaultWorkspace(data: any) {
+    return this.request('/vault', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // GitOps
+  async getGitOpsWorkspace() {
+    return this.request('/gitops', { method: 'GET' });
+  }
+
+  async updateGitOpsWorkspace(data: any) {
+    return this.request('/gitops', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Profile
+  async getProfile() {
+    return this.request('/profile', { method: 'GET' });
+  }
+
+  async updateProfile(data: any) {
+    return this.request('/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Plan / subscription (read-only from this client's perspective --
+  // upgrades happen through the payment flow, not this endpoint)
+  async getPlan() {
+    return this.request('/payment/plan', { method: 'GET' });
   }
 
   // Alerts

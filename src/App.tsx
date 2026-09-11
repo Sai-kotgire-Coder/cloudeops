@@ -23,17 +23,30 @@ import IssuesPage from "./pages/IssuesPage.tsx";
 import IAMPage from "./pages/IAMPage.tsx";
 import ScenariosPage from "./pages/ScenariosPage.tsx";
 import ContainerLabPage from "./pages/ContainerLabPage.tsx";
+import TerraformLabPage from "./pages/TerraformLabPage.tsx";
+import AnsibleLabPage from "./pages/AnsibleLabPage.tsx";
+import VaultLabPage from "./pages/VaultLabPage.tsx";
+import KubectlLabPage from "./pages/KubectlLabPage.tsx";
+import GitOpsLabPage from "./pages/GitOpsLabPage.tsx";
+import MyAccountPage from "./pages/MyAccountPage.tsx";
 import NetworkingPage from "./pages/NetworkingPage.tsx";
 import PricingPage from "./pages/PricingPage.tsx";
 import LoginPage from "./pages/LoginPage.tsx";
 import RegisterPage from "./pages/RegisterPage.tsx";
 import VerifyOTPPage from "./pages/VerifyOTPPage.tsx";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 import { LearningSidebar } from "@/components/learning/LearningSidebar";
 import { GuidanceBanner } from "@/components/learning/GuidanceBanner";
 import { OnboardingOverlay } from "@/components/learning/OnboardingOverlay";
 import { MobileBottomNav } from "@/components/game/MobileBottomNav";
+import { ScenarioObjectiveWatcher } from "@/components/scenario/ScenarioObjectiveWatcher";
+import { ScenarioBanner } from "@/components/game/ScenarioBanner";
+import { HintDisplay } from "@/components/scenario/HintDisplay";
+import { GitOpsReconciler } from "@/components/gitops/GitOpsReconciler";
+import { OnboardingGate } from "@/components/account/OnboardingGate";
+import { SessionGuard } from "@/components/auth/SessionGuard";
 
 const queryClient = new QueryClient();
 
@@ -84,42 +97,55 @@ const App = () => {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/verify-otp" element={<VerifyOTPPage />} />
-            <Route path="/verify-otp" element={<VerifyOTPPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
             {/* Protected routes */}
             <Route
               path="/*"
               element={
                 <ProtectedRoute>
-                  <LearningSidebar />
-                  <GuidanceBanner />
-                  <OnboardingOverlay />
-                  <SidebarProvider defaultOpen={false}>
-                    <div className="min-h-screen flex w-full">
-                      <AppSidebar />
-                      <div className="flex-1 flex flex-col min-w-0 pb-16 md:pb-0">
-                        <Routes>
-                          <Route path="/" element={<Index />} />
-                          <Route path="/pricing" element={<PricingPage />} />
-                          <Route path="/apps" element={<ApplicationsPage />} />
-                          <Route path="/apps/:id" element={<ManageApplicationPage />} />
-                          <Route path="/instances" element={<InstancesPage />} />
-                          <Route path="/instances/:id" element={<ManageInstancePage />} />
-                          <Route path="/cicd" element={<CICDPage />} />
-                          <Route path="/live" element={<LiveInstancesPage />} />
-                          <Route path="/cli" element={<CLIPage />} />
-                          <Route path="/tickets" element={<TicketsPage />} />
-                          <Route path="/issues" element={<IssuesPage />} />
-                          <Route path="/iam" element={<IAMPage />} />
-                          <Route path="/scenarios" element={<ScenariosPage />} />
-                          <Route path="/containers" element={<ContainerLabPage />} />
-                          <Route path="/networking" element={<NetworkingPage />} />
-                          <Route path="*" element={<NotFound />} />
-                        </Routes>
-                        <MobileBottomNav />
+                  <SessionGuard />
+                  <OnboardingGate>
+                    <LearningSidebar />
+                    <GuidanceBanner />
+                    <OnboardingOverlay />
+                    <ScenarioObjectiveWatcher />
+                    <GitOpsReconciler />
+                    <ScenarioBanner />
+                    <HintDisplay />
+                    <SidebarProvider defaultOpen={false}>
+                      <div className="min-h-screen flex w-full">
+                        <AppSidebar />
+                        <div className="flex-1 flex flex-col min-w-0 pb-16 md:pb-0">
+                          <Routes>
+                            <Route path="/" element={<Index />} />
+                            <Route path="/pricing" element={<PricingPage />} />
+                            <Route path="/account" element={<MyAccountPage />} />
+                            <Route path="/apps" element={<ApplicationsPage />} />
+                            <Route path="/apps/:id" element={<ManageApplicationPage />} />
+                            <Route path="/instances" element={<InstancesPage />} />
+                            <Route path="/instances/:id" element={<ManageInstancePage />} />
+                            <Route path="/cicd" element={<CICDPage />} />
+                            <Route path="/live" element={<LiveInstancesPage />} />
+                            <Route path="/cli" element={<CLIPage />} />
+                            <Route path="/tickets" element={<TicketsPage />} />
+                            <Route path="/issues" element={<IssuesPage />} />
+                            <Route path="/iam" element={<IAMPage />} />
+                            <Route path="/scenarios" element={<ScenariosPage />} />
+                            <Route path="/containers" element={<ContainerLabPage />} />
+                            <Route path="/terraform" element={<TerraformLabPage />} />
+                            <Route path="/ansible" element={<AnsibleLabPage />} />
+                            <Route path="/vault" element={<VaultLabPage />} />
+                            <Route path="/kubectl" element={<KubectlLabPage />} />
+                            <Route path="/gitops" element={<GitOpsLabPage />} />
+                            <Route path="/networking" element={<NetworkingPage />} />
+                            <Route path="*" element={<NotFound />} />
+                          </Routes>
+                          <MobileBottomNav />
+                        </div>
                       </div>
-                    </div>
-                  </SidebarProvider>
+                    </SidebarProvider>
+                  </OnboardingGate>
                 </ProtectedRoute>
               }
             />

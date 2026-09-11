@@ -15,7 +15,12 @@ export type TopicId =
   | 'containers'
   | 'networking'
   | 'ingress'
-  | 'load_balancing';
+  | 'load_balancing'
+  | 'iac'
+  | 'config_management'
+  | 'secrets_management'
+  | 'kubectl_cli'
+  | 'gitops';
 
 interface LearningState {
   sidebarOpen: boolean;

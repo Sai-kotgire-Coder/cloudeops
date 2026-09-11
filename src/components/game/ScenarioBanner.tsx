@@ -1,29 +1,19 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Target, Clock, Lightbulb, Trophy, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useScenarioStore } from '@/store/scenarioStore';
-import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 
+// checkObjectives() polling lives in ScenarioObjectiveWatcher, mounted once at
+// the App level -- this component only renders the active scenario's state.
 export const ScenarioBanner = () => {
-  const { 
-    activeScenario, 
-    scenarioStartTime, 
-    currentHintIndex, 
-    exitScenario, 
-    showNextHint, 
-    checkObjectives 
+  const {
+    activeScenario,
+    scenarioStartTime,
+    currentHintIndex,
+    exitScenario,
+    showNextHint,
   } = useScenarioStore();
-
-  useEffect(() => {
-    if (!activeScenario) return;
-
-    const interval = setInterval(() => {
-      checkObjectives();
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [activeScenario, checkObjectives]);
 
   if (!activeScenario) return null;
 

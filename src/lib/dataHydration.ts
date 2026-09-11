@@ -5,6 +5,11 @@ import { useContainerStore } from '@/store/containerStore';
 import { useNetworkStore } from '@/store/networkStore';
 import { useTicketStore } from '@/store/ticketStore';
 import { useAlertStore } from '@/store/alertStore';
+import { useTerraformStore } from '@/store/terraformStore';
+import { useAnsibleStore } from '@/store/ansibleStore';
+import { useVaultStore } from '@/store/vaultStore';
+import { useGitOpsStore } from '@/store/gitopsStore';
+import { useProfileStore } from '@/store/profileStore';
 
 /**
  * Hydrate all user data from the backend on login
@@ -28,6 +33,12 @@ export async function hydrateUserData() {
       alerts,
       progress,
       gameState,
+      terraform,
+      ansible,
+      vault,
+      gitops,
+      profile,
+      plan,
     ] = await Promise.allSettled([
       apiClient.getApplications(),
       apiClient.getInstances(),
@@ -41,6 +52,12 @@ export async function hydrateUserData() {
       apiClient.getAlerts(),
       apiClient.getProgress(),
       apiClient.getGameState(),
+      apiClient.getTerraformWorkspace(),
+      apiClient.getAnsibleWorkspace(),
+      apiClient.getVaultWorkspace(),
+      apiClient.getGitOpsWorkspace(),
+      apiClient.getProfile(),
+      apiClient.getPlan(),
     ]);
 
     console.log('✅ User data hydration complete', {
@@ -56,6 +73,10 @@ export async function hydrateUserData() {
       alerts: alerts.status === 'fulfilled' ? alerts.value : [],
       progress: progress.status === 'fulfilled' ? progress.value : [],
       gameState: gameState.status === 'fulfilled' ? gameState.value : null,
+      terraform: terraform.status === 'fulfilled' ? terraform.value : null,
+      ansible: ansible.status === 'fulfilled' ? ansible.value : null,
+      vault: vault.status === 'fulfilled' ? vault.value : null,
+      gitops: gitops.status === 'fulfilled' ? gitops.value : null,
     });
 
     // Hydrate GameStore with instances, applications, and game state
@@ -151,6 +172,35 @@ export async function hydrateUserData() {
       await loadPipelines();
     }
 
+    // Hydrate TerraformStore with the saved workspace
+    if (terraform.status === 'fulfilled' && terraform.value) {
+      useTerraformStore.getState().hydrate(terraform.value);
+    }
+
+    // Hydrate AnsibleStore with the saved workspace
+    if (ansible.status === 'fulfilled' && ansible.value) {
+      useAnsibleStore.getState().hydrate(ansible.value);
+    }
+
+    // Hydrate VaultStore with the saved workspace
+    if (vault.status === 'fulfilled' && vault.value) {
+      useVaultStore.getState().hydrate(vault.value);
+    }
+
+    // Hydrate GitOpsStore with the saved workspace
+    if (gitops.status === 'fulfilled' && gitops.value) {
+      useGitOpsStore.getState().hydrate(gitops.value);
+    }
+
+    // Hydrate ProfileStore with personal info, selected modules, and plan.
+    // OnboardingGate blocks rendering on this store's `hydrated` flag, so a
+    // failed fetch must still flip it (to safe all-modules/onboarding-done
+    // defaults) rather than leaving the app stuck on a spinner.
+    useProfileStore.getState().hydrate(profile.status === 'fulfilled' && profile.value ? (profile.value as any) : {});
+    if (plan.status === 'fulfilled' && plan.value) {
+      useProfileStore.getState().hydratePlan(plan.value as any);
+    }
+
     return {
       applications: applications.status === 'fulfilled' ? applications.value : [],
       instances: instances.status === 'fulfilled' ? instances.value : [],
@@ -164,6 +214,10 @@ export async function hydrateUserData() {
       alerts: alerts.status === 'fulfilled' ? alerts.value : [],
       progress: progress.status === 'fulfilled' ? progress.value : [],
       gameState: gameState.status === 'fulfilled' ? gameState.value : null,
+      terraform: terraform.status === 'fulfilled' ? terraform.value : null,
+      ansible: ansible.status === 'fulfilled' ? ansible.value : null,
+      vault: vault.status === 'fulfilled' ? vault.value : null,
+      gitops: gitops.status === 'fulfilled' ? gitops.value : null,
     };
   } catch (error) {
     console.error('❌ Failed to hydrate user data:', error);

@@ -1,13 +1,36 @@
 import { motion } from 'framer-motion';
-import { Target, Trophy, Star, Lock, Play, CheckCircle2 } from 'lucide-react';
-import { useScenarioStore, SCENARIOS } from '@/store/scenarioStore';
+import {
+  Target, Trophy, Star, Lock, Play, CheckCircle2,
+  Rocket, GitBranch, Container, Network, GitPullRequest, ShieldCheck, FileCode, LifeBuoy,
+} from 'lucide-react';
+import { useScenarioStore, SCENARIOS, type ScenarioCategory } from '@/store/scenarioStore';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+
+const CATEGORY_META: Record<ScenarioCategory, { label: string; icon: typeof Target }> = {
+  fundamentals: { label: 'Fundamentals', icon: Rocket },
+  deployment: { label: 'Deployment Strategies', icon: GitBranch },
+  containers: { label: 'Container Lab', icon: Container },
+  networking: { label: 'Networking', icon: Network },
+  cicd: { label: 'CI/CD', icon: GitPullRequest },
+  iam: { label: 'IAM & Security', icon: ShieldCheck },
+  terraform: { label: 'Infrastructure as Code', icon: FileCode },
+  incident_response: { label: 'Incident Response', icon: LifeBuoy },
+};
+
+const CATEGORY_ORDER: ScenarioCategory[] = [
+  'fundamentals', 'deployment', 'containers', 'networking', 'cicd', 'iam', 'terraform', 'incident_response',
+];
 
 export const ScenarioSelector = () => {
   const { completedScenarios, totalXP, startScenario, activeScenario } = useScenarioStore();
 
   const scenarioList = Object.values(SCENARIOS);
+
+  const scenariosByCategory = CATEGORY_ORDER.map((category) => ({
+    category,
+    scenarios: scenarioList.filter((s) => s.category === category),
+  })).filter((group) => group.scenarios.length > 0);
 
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
@@ -47,13 +70,30 @@ export const ScenarioSelector = () => {
         </div>
       </div>
 
-      {/* Scenarios Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {scenarioList.map((scenario, index) => {
-          const completed = isCompleted(scenario.id);
-          const locked = index > 0 && !isCompleted(scenarioList[index - 1].id);
+      {/* Scenarios grouped by category -- unlock progression is per-category,
+          not one single 20-long chain, since e.g. Networking and Terraform
+          scenarios have nothing to do with each other. */}
+      {scenariosByCategory.map(({ category, scenarios }) => {
+        const meta = CATEGORY_META[category];
+        const CategoryIcon = meta.icon;
+        const categoryCompletedCount = scenarios.filter((s) => isCompleted(s.id)).length;
 
-          return (
+        return (
+          <div key={category} className="space-y-3">
+            <div className="flex items-center gap-2">
+              <CategoryIcon className="w-5 h-5 text-primary" />
+              <h3 className="text-lg font-bold">{meta.label}</h3>
+              <span className="text-xs text-muted-foreground">
+                {categoryCompletedCount} / {scenarios.length} completed
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {scenarios.map((scenario, index) => {
+                const completed = isCompleted(scenario.id);
+                const locked = index > 0 && !isCompleted(scenarios[index - 1].id);
+
+                return (
             <motion.div
               key={scenario.id}
               initial={{ opacity: 0, y: 20 }}
@@ -139,9 +179,12 @@ export const ScenarioSelector = () => {
                 )}
               </div>
             </motion.div>
-          );
-        })}
-      </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 };

@@ -208,5 +208,80 @@ export const LEARNING_CONTENT: Record<TopicId, LearningTopic> = {
     why_it_matters: 'Poor load balancing leads to "hot spots" where one pod is maxed out at 100% CPU while others sit idle. This causes slow response times, timeouts, and crashes. Intelligent load balancing ensures even distribution, maximizes throughput, and provides fault tolerance when pods fail.',
     simulator_context: 'Create a Load Balancer in the Networking Simulator and experiment with Round Robin vs Least Connections. Send high traffic with the slider and watch the Traffic Distribution chart. Round Robin gives equal RPS to all pods. Least Connections favors pods with lower current load. Simulate a pod crash to see traffic automatically redistribute to healthy pods.',
     pro_tip: 'Choose Round Robin for similar-sized requests (like API calls). Choose Least Connections for variable request durations (like file uploads or long-polling). In cloud environments, always enable health checks — never send traffic to a pod that is failing.'
+  },
+  iac: {
+    id: 'iac',
+    title: 'Infrastructure as Code (IaC)',
+    beginner: 'Infrastructure as Code means describing your servers, networks, and other cloud resources in text files instead of clicking through a console. A tool then reads that text and builds the real thing for you.',
+    how_it_works: [
+      'You write config files describing the infrastructure you want (a "resource block" per piece).',
+      'The tool compares your config against what already exists — this is called a "plan".',
+      'You review the plan, which shows exactly what will be added, changed, or removed.',
+      'You "apply" the plan, and the tool creates, updates, or destroys real infrastructure to match.',
+      'The tool remembers what it built in a "state" file, so next time it only changes what\'s different.'
+    ],
+    why_it_matters: 'Manually clicking through a cloud console doesn\'t scale, isn\'t repeatable, and leaves no record of what changed or why. IaC turns infrastructure changes into something reviewable like code — the same discipline you\'d apply to an application.',
+    simulator_context: 'The Terraform Lab lets you write resource blocks, run a Plan to preview the diff, Apply it to provision resources, and even simulate real-world drift (someone changing something by hand) to see how IaC tools detect and reconcile it.',
+    pro_tip: 'Terraform is the most widely used tool for this, but the same plan → review → apply pattern shows up across the ecosystem — it\'s the core idea to understand, not just one tool\'s syntax.'
+  },
+  config_management: {
+    id: 'config_management',
+    title: 'Configuration Management',
+    beginner: 'Configuration management is about keeping servers that already exist set up correctly — installed packages, running services, correct file permissions — without you having to SSH in and do it by hand, every time, on every server.',
+    how_it_works: [
+      'You describe the desired setup as a list of tasks in a "playbook" (e.g. "nginx should be installed and running").',
+      'A list of target servers is defined in an "inventory".',
+      'The tool connects to each server (often over plain SSH — no special agent needed) and checks the current state.',
+      'It only changes what\'s actually different from the desired state — nothing happens if a server is already correct.',
+      'Run the same playbook again anytime, safely — that property is called idempotency.'
+    ],
+    why_it_matters: 'Without it, "how is this server configured?" is answered by tribal knowledge and old SSH history. Configuration management makes server setup reviewable, repeatable, and safe to re-run — the same discipline Infrastructure as Code brings to provisioning, applied to what runs on top of it.',
+    simulator_context: 'The Ansible Lab lets you build an inventory of hosts, write playbook tasks using real modules, preview them with --check, run them for real, and simulate someone changing a server by hand to see how the next run detects and reconciles it.',
+    pro_tip: 'Terraform decides what infrastructure should exist; configuration management tools like Ansible decide what\'s installed and running on it. Most real teams use both together, not one instead of the other.'
+  },
+  secrets_management: {
+    id: 'secrets_management',
+    title: 'Secrets Management',
+    beginner: 'Secrets management is about storing passwords, API keys, and certificates in one controlled place instead of scattered across config files and Slack messages — and strictly controlling who (or what) is allowed to read each one.',
+    how_it_works: [
+      'Secrets live behind a "secrets engine" — a plugin for a specific kind of secret (static key/value, dynamic database credentials, certificates, etc.).',
+      'A "policy" declares which paths a given identity can read, write, or list — nothing is accessible by default.',
+      'A "token" (or another auth method) proves who\'s asking, and carries one or more attached policies.',
+      'Every request checks the token\'s policies against the requested path before allowing or denying it.',
+      'Some engines issue secrets that expire on their own (a "lease"), so a leaked credential stops working automatically.'
+    ],
+    why_it_matters: 'Without this, "who can see the production database password?" is usually answered by "everyone who has ever needed it, forever." Centralizing secrets with real access control means a leaked credential is scoped, an offboarded engineer\'s access actually disappears, and every read is auditable.',
+    simulator_context: 'The Vault Lab lets you enable a secrets engine, write a versioned secret, write an HCL policy scoping access to one path, attach it to a token, and then attempt to read the secret as that token — you\'ll see a real allow or a real "permission denied" depending on whether the policy actually covers it.',
+    pro_tip: 'The habit worth building is least privilege by default: a policy should grant exactly the paths and capabilities a token needs, nothing broader "just in case."'
+  },
+  kubectl_cli: {
+    id: 'kubectl_cli',
+    title: 'kubectl: Talking Directly to Kubernetes',
+    beginner: 'kubectl is the command-line tool for interacting with a Kubernetes cluster directly — listing what\'s running, inspecting why something is broken, and making changes, all without needing a UI.',
+    how_it_works: [
+      'Every command follows the same shape: `kubectl <verb> <resource> [name] [flags]` — e.g. `kubectl get pods`, `kubectl scale deployment web --replicas=5`.',
+      '`get` lists resources, `describe` shows deep detail on one, `logs` shows a container\'s output, `exec` runs a command inside a running container.',
+      '`apply -f file.yaml` is declarative — you describe the end state and Kubernetes reconciles toward it.',
+      '`create`, `scale`, and `expose` are imperative — you tell it exactly what to do, right now.',
+      '`rollout status/restart/undo` manage a Deployment\'s update history, including rolling back a bad release.'
+    ],
+    why_it_matters: 'Buttons in a dashboard can\'t cover every situation, and most real incident response happens at a terminal. Being fluent in kubectl — especially `describe` and `logs` — is usually the fastest way to actually find out why something is broken.',
+    simulator_context: 'The kubectl Lab is a real terminal running against the exact same cluster state as the rest of the app — `kubectl scale deployment web --replicas=5` here does the same thing the Scale button does on the Applications page, just from the command line.',
+    pro_tip: '`kubectl describe` and `kubectl logs` are the two commands you\'ll reach for the most during an actual incident — get comfortable with both before you need them under pressure.'
+  },
+  gitops: {
+    id: 'gitops',
+    title: 'GitOps: Git as the Source of Truth',
+    beginner: 'GitOps means the desired state of your infrastructure and applications lives in a Git repository, and an automated controller continuously makes the live system match what\'s in Git — instead of engineers running commands by hand against the cluster.',
+    how_it_works: [
+      'You commit a change (a new image version, a replica count) to a Git repo instead of running a command against the cluster directly.',
+      'A controller (like Argo CD or Flux) is always watching that repo and comparing it to what\'s actually running.',
+      'If Git and the live cluster differ, the app is "OutOfSync" — the controller can sync automatically, or wait for a human to click Sync.',
+      'If someone changes the live cluster by hand (a manual `kubectl scale`), that\'s "drift" — the live system no longer matches Git.',
+      'With self-heal enabled, the controller reverts that manual drift on its own, so Git always wins.'
+    ],
+    why_it_matters: 'Manual changes against a live cluster are invisible and unreviewable — nobody can tell what changed, why, or who approved it. GitOps makes every change a commit: reviewable, revertible with `git revert`, and auditable, and it means the cluster can never silently drift from what\'s documented.',
+    simulator_context: 'The GitOps Lab lets you link a Git repo path to a real deployed Application, commit version/replica changes, and watch Auto-Sync apply them automatically — then use Simulate Drift to change replicas by hand and watch Self-Heal correct it back, in the background, from any page.',
+    pro_tip: 'Auto-Sync and Self-Heal are two different switches: Auto-Sync applies new commits automatically; Self-Heal reverts manual out-of-band changes automatically. Real Argo CD treats them as separate settings for exactly this reason.'
   }
 };

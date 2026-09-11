@@ -1,8 +1,10 @@
-import { Server, GitBranch, Activity, Terminal, Ticket, AlertTriangle, Zap, Layers, Target, Container, LogOut, User, Network, Rocket } from 'lucide-react';
+import { Zap, LogOut, User, Rocket } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { useAlertStore } from '@/store/alertStore';
+import { useProfileStore } from '@/store/profileStore';
+import { MODULE_CATALOG } from '@/data/moduleCatalog';
 import {
   Sidebar,
   SidebarContent,
@@ -26,20 +28,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-const menuItems = [
-  { title: 'Dashboard', url: '/', icon: Activity },
-  { title: 'Scenarios', url: '/scenarios', icon: Target },
-  { title: 'Applications', url: '/apps', icon: Layers },
-  { title: 'Container Lab', url: '/containers', icon: Container },
-  { title: 'Networking', url: '/networking', icon: Network },
-  { title: 'Instances', url: '/instances', icon: Server },
-  { title: 'CI/CD', url: '/cicd', icon: GitBranch },
-  { title: 'Live Instances', url: '/live', icon: Zap },
-  { title: 'AWS CLI', url: '/cli', icon: Terminal },
-  { title: 'Tickets', url: '/tickets', icon: Ticket },
-  { title: 'Issues', url: '/issues', icon: AlertTriangle },
-];
-
 const upgradeSectionItems = [
   { title: 'Pricing & Plans', url: '/pricing', icon: Rocket, badge: 'Pro' },
 ];
@@ -52,6 +40,8 @@ export function AppSidebar() {
   const { user, logout } = useAuthStore();
   const criticalCount = useAlertStore((state) => state.getCriticalCount());
   const highCount = useAlertStore((state) => state.getHighCount());
+  const selectedModuleIds = useProfileStore((s) => s.selectedModules);
+  const menuItems = MODULE_CATALOG.filter((m) => selectedModuleIds.includes(m.id));
 
   const handleLogout = () => {
     logout();
@@ -81,11 +71,11 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems.map((item) => {
-                const isIssues = item.title === 'Issues';
+                const isIssues = item.id === 'issues';
                 const showBadge = isIssues && urgentAlertsCount > 0;
-                
+
                 return (
-                  <SidebarMenuItem key={item.title}>
+                  <SidebarMenuItem key={item.id}>
                     <SidebarMenuButton asChild isActive={location.pathname === item.url}>
                       <NavLink
                         to={item.url}
@@ -159,8 +149,12 @@ export function AppSidebar() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuLabel>My Account</DropdownMenuLabel>
+              <DropdownMenuLabel>Account</DropdownMenuLabel>
               <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => navigate('/account')}>
+                <User className="mr-2 h-4 w-4" />
+                My Account
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={handleLogout}>
                 <LogOut className="mr-2 h-4 w-4" />
                 Logout
@@ -168,15 +162,26 @@ export function AppSidebar() {
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleLogout}
-            className="w-8 h-8"
-            title="Logout"
-          >
-            <LogOut className="h-4 w-4" />
-          </Button>
+          <div className="flex flex-col items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate('/account')}
+              className="w-8 h-8"
+              title="My Account"
+            >
+              <User className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleLogout}
+              className="w-8 h-8"
+              title="Logout"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
         )}
       </SidebarFooter>
     </Sidebar>

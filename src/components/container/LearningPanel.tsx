@@ -14,9 +14,19 @@ interface LearningPanelProps {
 const getModuleForTopic = (topicId: LearningSectionId): string => {
   const cicdTopics = ['ci_pipeline', 'build_stage', 'test_stage', 'docker_build', 'image_push', 'deployment', 'rollback', 'deployment_strategies', 'pipeline_monitoring'];
   const dockerTopics = ['dockerImage', 'container', 'traffic', 'loadBalancer', 'autoScaling', 'containerCrash', 'buildProcess', 'baseImages', 'ports'];
-  
+  const terraformTopics = ['terraformResource', 'terraformPlanApply', 'terraformState', 'terraformDrift'];
+  const ansibleTopics = ['ansibleInventory', 'ansiblePlaybook', 'ansibleIdempotency', 'ansibleDrift'];
+  const vaultTopics = ['vaultSecretsEngine', 'vaultKvVersioning', 'vaultPolicies', 'vaultTokens'];
+  const kubectlTopics = ['kubectlPodsAndDeployments', 'kubectlDeclarativeVsImperative', 'kubectlRollouts', 'kubectlTroubleshooting'];
+  const gitopsTopics = ['gitopsApplication', 'gitopsDesiredState', 'gitopsSyncStatus'];
+
   if (cicdTopics.includes(topicId)) return 'CI/CD Pipeline';
   if (dockerTopics.includes(topicId)) return 'Container Lab';
+  if (terraformTopics.includes(topicId)) return 'Terraform Lab';
+  if (ansibleTopics.includes(topicId)) return 'Ansible Lab';
+  if (vaultTopics.includes(topicId)) return 'Vault Lab';
+  if (kubectlTopics.includes(topicId)) return 'kubectl Lab';
+  if (gitopsTopics.includes(topicId)) return 'GitOps Lab';
   return 'Learning';
 };
 

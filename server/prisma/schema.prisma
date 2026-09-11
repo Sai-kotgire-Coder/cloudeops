@@ -17,6 +17,19 @@ model User {
   otpCode      String?   @map("otp_code")
   otpExpiry    DateTime? @map("otp_expiry")
   isVerified   Boolean   @default(false) @map("is_verified")
+
+  // Forgot-password flow -- kept separate from otpCode/otpExpiry (email
+  // verification) so a pending verification code and a pending reset code
+  // never collide or invalidate each other.
+  resetPasswordOtp       String?   @map("reset_password_otp")
+  resetPasswordOtpExpiry DateTime? @map("reset_password_otp_expiry")
+
+  // Bumped on password change, password reset, or an explicit "log out of
+  // all devices" request. Every JWT embeds the tokenVersion it was issued
+  // with; authMiddleware rejects any token whose version doesn't match the
+  // user's current one, which is what actually revokes already-issued
+  // tokens (a bare JWT signature check can't do this on its own).
+  tokenVersion Int @default(0) @map("token_version")
   
   // Plan & Subscription fields
   planType     String    @default("free") @map("plan_type") // "free" or "pro"
@@ -40,6 +53,11 @@ model User {
   gameState    GameState?
   alerts       Alert[]
   payments     Payment[]
+  terraformWorkspace TerraformWorkspace?
+  ansibleWorkspace   AnsibleWorkspace?
+  vaultWorkspace     VaultWorkspace?
+  gitopsWorkspace    GitOpsWorkspace?
+  profile            UserProfile?
 
   @@map("users")
 }
@@ -291,6 +309,125 @@ model NetworkingState {
   @@unique([userId])
   @@index([userId])
   @@map("networking_state")
+}
+
+// Terraform Lab: one workspace per user, holding authored config, last-applied
+// state, and the apply/destroy history -- mirrors the plan/apply/state lifecycle.
+model TerraformWorkspace {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  resourceCount Int      @default(0) @map("resource_count")
+  appliedCount  Int      @default(0) @map("applied_count")
+  config        Json?    @db.JsonB // authored resource blocks (the desired state)
+  state         Json?    @db.JsonB // last-applied resource blocks (the tfstate)
+  history       Json?    @db.JsonB // array of apply/destroy/drift events
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId])
+  @@index([userId])
+  @@map("terraform_workspaces")
+}
+
+// Ansible Lab: one workspace per user, holding the inventory, the playbook
+// tasks authored against it, the per-host configured state after the last
+// run, and the run history -- mirrors the run/re-run/idempotency lifecycle.
+model AnsibleWorkspace {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  taskCount    Int      @default(0) @map("task_count")
+  runCount     Int      @default(0) @map("run_count")
+  inventory    Json?    @db.JsonB // hosts/groups the playbook targets
+  playbook     Json?    @db.JsonB // authored tasks (the desired configuration)
+  hostState    Json?    @map("host_state") @db.JsonB // last-converged state per host
+  history      Json?    @db.JsonB // array of run/drift events
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId])
+  @@index([userId])
+  @@map("ansible_workspaces")
+}
+
+// Vault Lab: one workspace per user, holding enabled secrets engines, the
+// secrets written into them (with version history), access-control policies,
+// tokens with attached policies, and a log of allowed/denied read attempts.
+model VaultWorkspace {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  secretCount  Int      @default(0) @map("secret_count")
+  accessCount  Int      @default(0) @map("access_count")
+  engines      Json?    @db.JsonB // enabled secrets engines (type + mount path)
+  secrets      Json?    @db.JsonB // KV secrets, each with a version history
+  policies     Json?    @db.JsonB // HCL access-control policies
+  tokens       Json?    @db.JsonB // tokens with attached policy ids
+  history      Json?    @db.JsonB // array of write/access-allowed/access-denied events
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId])
+  @@index([userId])
+  @@map("vault_workspaces")
+}
+
+// GitOps Lab: one workspace per user, holding GitOps "Application" links
+// (each pointing at a real Application from the main simulator), the commit
+// history that declares desired version/replicas, and a log of syncs,
+// drift, and self-heals -- reconciliation happens against the real
+// GameState applications, not a separate fake cluster.
+model GitOpsWorkspace {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  commitCount  Int      @default(0) @map("commit_count")
+  syncCount    Int      @default(0) @map("sync_count")
+  apps         Json?    @db.JsonB // GitOps Application definitions (repo, target, sync policy)
+  commits      Json?    @db.JsonB // commit history declaring desired version/replicas per app
+  history      Json?    @db.JsonB // array of commit/sync/drift/self-heal events
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId])
+  @@index([userId])
+  @@map("gitops_workspaces")
+}
+
+// Personal info + which nav modules a user has chosen to have visible.
+// selectedModules/onboardingComplete default to "everything, already done"
+// so existing accounts (created before this feature) are unaffected --
+// brand-new registrations explicitly override both to empty/false in the
+// /auth/register handler, which is what actually triggers the forced
+// first-run onboarding gate for them.
+model UserProfile {
+  id                String    @id @default(uuid())
+  userId            String    @map("user_id")
+
+  fullName          String?   @map("full_name")
+  phone             String?
+  linkedinUrl       String?   @map("linkedin_url")
+  instagramHandle   String?   @map("instagram_handle")
+  dateOfBirth       DateTime? @map("date_of_birth")
+  institute         String? // college / institute name
+  occupation        String? // 'student' | 'professional' | 'other'
+
+  selectedModules   String[]  @default(["dashboard","scenarios","applications","containers","terraform","ansible","vault","kubectl","gitops","networking","instances","cicd","live","cli","tickets","issues"]) @map("selected_modules")
+  onboardingComplete Boolean  @default(true) @map("onboarding_complete")
+
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId])
+  @@index([userId])
+  @@map("user_profiles")
 }
 
 // Game Simulation State (ASG, HPA, VPA, traffic, score, alerts)
