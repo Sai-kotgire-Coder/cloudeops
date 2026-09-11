@@ -5,8 +5,12 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Migrations run over a direct (unpooled) connection -- Neon's pooled
+  // endpoint uses PgBouncer in transaction mode, which doesn't support the
+  // long-lived sessions/prepared statements Prisma's migration engine needs.
+  directUrl = env("DIRECT_URL")
 }
 
 // User account and authentication
