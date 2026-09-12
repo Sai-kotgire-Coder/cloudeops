@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { apiClient } from '@/lib/apiClient';
 import { useToast } from '@/hooks/use-toast';
+import { getReferralCodeFromUrl } from '@/lib/referral';
 
 declare global {
   interface Window {
@@ -46,7 +47,7 @@ export const GoogleSignInButton = () => {
 
     const handleCredentialResponse = async (response: { credential: string }) => {
       try {
-        const result = await apiClient.googleLogin(response.credential);
+        const result = await apiClient.googleLogin(response.credential, getReferralCodeFromUrl());
         localStorage.setItem('auth_token', result.token);
         await setAuthState(result.user, result.token);
         toast({ title: 'Welcome!', description: 'Signed in with Google.' });

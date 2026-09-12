@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Loader2, TriangleAlert } from 'lucide-react';
 import { apiClient } from '@/lib/apiClient';
 import { useAuthStore } from '@/store/authStore';
+import { consumeStashedGitHubReferralCode } from '@/lib/referral';
 
 // Public route -- the user lands here unauthenticated, straight off
 // GitHub's redirect, with a one-time authorization code in the query
@@ -28,7 +29,7 @@ export default function GitHubCallbackPage() {
     const redirectUri = `${window.location.origin}/auth/github/callback`;
 
     apiClient
-      .githubLogin(code, redirectUri)
+      .githubLogin(code, redirectUri, consumeStashedGitHubReferralCode())
       .then(async (result) => {
         localStorage.setItem('auth_token', result.token);
         await setAuthState(result.user, result.token);

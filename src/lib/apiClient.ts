@@ -56,11 +56,11 @@ class ApiClient {
   }
 
   // Auth endpoints
-  async register(email: string, password: string): Promise<RegisterResponse> {
+  async register(email: string, password: string, referralCode?: string): Promise<RegisterResponse> {
     const response = await fetch(`${API_BASE_URL}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, referralCode }),
     });
 
     if (!response.ok) {
@@ -125,11 +125,11 @@ class ApiClient {
     return response.json();
   }
 
-  async googleLogin(credential: string): Promise<AuthResponse> {
+  async googleLogin(credential: string, referralCode?: string): Promise<AuthResponse> {
     const response = await fetch(`${API_BASE_URL}/auth/google`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ credential }),
+      body: JSON.stringify({ credential, referralCode }),
     });
 
     if (!response.ok) {
@@ -503,11 +503,11 @@ class ApiClient {
   }
 
   // GitHub Sign-In
-  async githubLogin(code: string, redirectUri: string): Promise<AuthResponse> {
+  async githubLogin(code: string, redirectUri: string, referralCode?: string): Promise<AuthResponse> {
     const response = await fetch(`${API_BASE_URL}/auth/github`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code, redirectUri }),
+      body: JSON.stringify({ code, redirectUri, referralCode }),
     });
 
     if (!response.ok) {
@@ -551,6 +551,11 @@ class ApiClient {
 
   async getCertificate(code: string): Promise<any> {
     return this.request(`/certificates/${code}`, { method: 'GET' });
+  }
+
+  // Referral program
+  async getMyReferral(): Promise<any> {
+    return this.request('/referral/me', { method: 'GET' });
   }
 
   // Admin audit log

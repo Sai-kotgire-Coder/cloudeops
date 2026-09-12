@@ -39,6 +39,7 @@ import ForgotPasswordPage from "./pages/ForgotPasswordPage.tsx";
 import GitHubCallbackPage from "./pages/GitHubCallbackPage.tsx";
 import LeaderboardPage from "./pages/LeaderboardPage.tsx";
 import CertificatesPage from "./pages/CertificatesPage.tsx";
+import ReferralPage from "./pages/ReferralPage.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 import { LearningSidebar } from "@/components/learning/LearningSidebar";
@@ -150,6 +151,7 @@ const App = () => {
                             <Route path="/networking" element={<NetworkingPage />} />
                             <Route path="/leaderboard" element={<LeaderboardPage />} />
                             <Route path="/certificates" element={<CertificatesPage />} />
+                            <Route path="/referrals" element={<ReferralPage />} />
                             <Route path="*" element={<NotFound />} />
                           </Routes>
                           <MobileBottomNav />

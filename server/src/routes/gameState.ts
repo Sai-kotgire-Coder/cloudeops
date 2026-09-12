@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 import prisma from '../lib/prisma.js';
+import { DEFAULT_ASG, DEFAULT_HPA, DEFAULT_VPA } from '../lib/gameState.js';
 
 const router = Router();
 
@@ -25,29 +26,9 @@ router.get('/', async (req: AuthRequest, res) => {
         scenario: null,
         totalCost: 0,
         hasLoadBalancer: false,
-        asg: {
-          enabled: false,
-          minInstances: 1,
-          maxInstances: 10,
-          targetCpuUp: 70,
-          targetCpuDown: 30,
-          instanceType: 't3.micro'
-        },
-        hpa: {
-          enabled: false,
-          minReplicas: 1,
-          maxReplicas: 10,
-          targetCpuPercent: 70,
-          scaleUpCooldownTicks: 10,
-          scaleDownCooldownTicks: 20,
-          lastScaleTick: 0
-        },
-        vpa: {
-          enabled: false,
-          mode: 'Off',
-          minInstanceType: 't3.micro',
-          maxInstanceType: 'c5.xlarge'
-        },
+        asg: DEFAULT_ASG,
+        hpa: DEFAULT_HPA,
+        vpa: DEFAULT_VPA,
         traffic: 0,
         targetTraffic: 0,
         cpuAvg: 0,
@@ -157,29 +138,9 @@ router.patch('/', async (req: AuthRequest, res) => {
         userId: req.userId!,
         ...updates,
         // Ensure required JSON fields have defaults
-        asg: updates.asg || {
-          enabled: false,
-          minInstances: 1,
-          maxInstances: 10,
-          targetCpuUp: 70,
-          targetCpuDown: 30,
-          instanceType: 't3.micro'
-        },
-        hpa: updates.hpa || {
-          enabled: false,
-          minReplicas: 1,
-          maxReplicas: 10,
-          targetCpuPercent: 70,
-          scaleUpCooldownTicks: 10,
-          scaleDownCooldownTicks: 20,
-          lastScaleTick: 0
-        },
-        vpa: updates.vpa || {
-          enabled: false,
-          mode: 'Off',
-          minInstanceType: 't3.micro',
-          maxInstanceType: 'c5.xlarge'
-        }
+        asg: updates.asg || DEFAULT_ASG,
+        hpa: updates.hpa || DEFAULT_HPA,
+        vpa: updates.vpa || DEFAULT_VPA
       }
     });
 

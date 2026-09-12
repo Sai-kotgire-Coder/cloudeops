@@ -1,9 +1,58 @@
 import { Router } from 'express';
 import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 import prisma from '../lib/prisma.js';
+import { ensureGameState } from '../lib/gameState.js';
 
 const router = Router();
 router.use(authMiddleware);
+
+const REFERRAL_BONUS_POINTS = 50;
+
+// Fires once, the first time a referred user completes onboarding -- not
+// at bare signup, so an abandoned account can't be farmed for points.
+// ReferralReward's unique constraint on refereeId is the actual guard
+// against double-firing (e.g. a race between two PATCH calls); the
+// !before?.onboardingComplete check above just avoids the extra queries
+// on every subsequent profile save.
+async function maybeAwardReferralBonus(userId: string) {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { referredById: true, email: true } });
+    if (!user?.referredById) return;
+
+    const existingReward = await prisma.referralReward.findUnique({ where: { refereeId: userId } });
+    if (existingReward) return;
+
+    await prisma.referralReward.create({
+      data: { referrerId: user.referredById, refereeId: userId, pointsAwarded: REFERRAL_BONUS_POINTS }
+    });
+
+    await ensureGameState(user.referredById);
+    await ensureGameState(userId);
+    await Promise.all([
+      prisma.gameState.update({ where: { userId: user.referredById }, data: { score: { increment: REFERRAL_BONUS_POINTS } } }),
+      prisma.gameState.update({ where: { userId }, data: { score: { increment: REFERRAL_BONUS_POINTS } } })
+    ]);
+
+    await prisma.notification.createMany({
+      data: [
+        {
+          userId: user.referredById,
+          title: 'Referral bonus earned',
+          message: `You earned ${REFERRAL_BONUS_POINTS} points for referring ${user.email}!`
+        },
+        {
+          userId,
+          title: 'Welcome bonus',
+          message: `You earned ${REFERRAL_BONUS_POINTS} points for joining via a referral!`
+        }
+      ]
+    });
+  } catch (error) {
+    // Non-fatal -- don't fail the onboarding-completion request itself
+    // over a referral bonus issue.
+    console.error('Referral bonus award error:', error);
+  }
+}
 
 // Get the user's profile (auto-creates with schema defaults if missing --
 // existing accounts created before this feature get "all modules visible,
@@ -57,11 +106,19 @@ router.patch('/', async (req: AuthRequest, res) => {
     if (selectedModules !== undefined) data.selectedModules = selectedModules;
     if (onboardingComplete !== undefined) data.onboardingComplete = onboardingComplete;
 
+    const before = onboardingComplete === true
+      ? await prisma.userProfile.findUnique({ where: { userId: req.userId! }, select: { onboardingComplete: true } })
+      : null;
+
     const profile = await prisma.userProfile.upsert({
       where: { userId: req.userId! },
       create: { userId: req.userId!, ...data },
       update: data
     });
+
+    if (onboardingComplete === true && !before?.onboardingComplete) {
+      await maybeAwardReferralBonus(req.userId!);
+    }
 
     res.json(profile);
   } catch (error) {

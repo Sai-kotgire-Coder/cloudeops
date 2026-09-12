@@ -10,6 +10,7 @@ import { Loader2, Shield, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
 import { GitHubSignInButton } from '@/components/auth/GitHubSignInButton';
+import { getReferralCodeFromUrl } from '@/lib/referral';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -64,7 +65,7 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
-      const response = await apiClient.register(email, password);
+      const response = await apiClient.register(email, password, getReferralCodeFromUrl());
       
       toast({
         title: 'Registration Successful!',

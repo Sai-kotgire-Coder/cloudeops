@@ -1,4 +1,4 @@
-import { Zap, LogOut, User, Rocket, ShieldAlert, Trophy, Award } from 'lucide-react';
+import { Zap, LogOut, User, Rocket, ShieldAlert, Trophy, Award, Gift } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
@@ -36,6 +36,7 @@ const upgradeSectionItems = [
 const communityItems = [
   { title: 'Leaderboard', url: '/leaderboard', icon: Trophy },
   { title: 'Certificates', url: '/certificates', icon: Award },
+  { title: 'Refer & Earn', url: '/referrals', icon: Gift },
 ];
 
 export function AppSidebar() {

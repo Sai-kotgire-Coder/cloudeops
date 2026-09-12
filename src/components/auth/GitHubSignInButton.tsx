@@ -1,5 +1,6 @@
 import { Github } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { getReferralCodeFromUrl, stashReferralCodeForGitHub } from '@/lib/referral';
 
 // Unlike Google, GitHub has no embeddable "sign in" widget -- this is a
 // plain button that kicks off GitHub's standard redirect-based OAuth flow.
@@ -10,6 +11,7 @@ export const GitHubSignInButton = () => {
   if (!clientId) return null;
 
   const handleClick = () => {
+    stashReferralCodeForGitHub(getReferralCodeFromUrl());
     const redirectUri = `${window.location.origin}/auth/github/callback`;
     const params = new URLSearchParams({
       client_id: clientId,

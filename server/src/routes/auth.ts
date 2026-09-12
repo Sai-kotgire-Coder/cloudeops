@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { z } from 'zod';
 import { OAuth2Client } from 'google-auth-library';
 import prisma from '../lib/prisma.js';
@@ -20,6 +21,28 @@ function signToken(userId: string, email: string, tokenVersion: number): string 
   );
 }
 
+// Every user gets a shareable referral code at creation, across all 3
+// signup paths (register/google/github). Retried a few times on the
+// astronomically unlikely chance of a collision.
+async function generateUniqueReferralCode(): Promise<string> {
+  for (let i = 0; i < 5; i++) {
+    const code = crypto.randomBytes(4).toString('hex'); // 8 hex chars
+    const existing = await prisma.user.findUnique({ where: { referralCode: code } });
+    if (!existing) return code;
+  }
+  throw new Error('Failed to generate a unique referral code');
+}
+
+// If the signup request supplied someone else's referral code, resolve it
+// to that user's id so the new user's referredById can be set at creation
+// time. The reward itself only fires later, on the new user's onboarding
+// completion (see profile.ts) -- not here.
+async function resolveReferrerId(referralCode?: string): Promise<string | undefined> {
+  if (!referralCode) return undefined;
+  const referrer = await prisma.user.findUnique({ where: { referralCode } });
+  return referrer?.id;
+}
+
 // Validation schemas
 const passwordSchema = z.string()
   .min(8, 'Password must be at least 8 characters')
@@ -30,7 +53,8 @@ const passwordSchema = z.string()
 
 const registerSchema = z.object({
   email: z.string().email(),
-  password: passwordSchema
+  password: passwordSchema,
+  referralCode: z.string().optional()
 });
 
 const loginSchema = z.object({
@@ -74,7 +98,7 @@ const deleteAccountSchema = z.object({
 // Register endpoint - Creates user and sends OTP
 router.post('/register', emailLimiter, async (req, res) => {
   try {
-    const { email, password } = registerSchema.parse(req.body);
+    const { email, password, referralCode } = registerSchema.parse(req.body);
 
     // Check if user exists
     const existingUser = await prisma.user.findUnique({
@@ -92,6 +116,11 @@ router.post('/register', emailLimiter, async (req, res) => {
     const otp = generateOTP();
     const otpExpiry = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
+    const [ownReferralCode, referredById] = await Promise.all([
+      generateUniqueReferralCode(),
+      resolveReferrerId(referralCode)
+    ]);
+
     // Create user with OTP
     const user = await prisma.user.create({
       data: {
@@ -99,7 +128,9 @@ router.post('/register', emailLimiter, async (req, res) => {
         passwordHash,
         otpCode: otp,
         otpExpiry,
-        isVerified: false
+        isVerified: false,
+        referralCode: ownReferralCode,
+        referredById
       }
     });
 
@@ -318,7 +349,8 @@ router.post('/login', authLimiter, async (req, res) => {
 });
 
 const googleAuthSchema = z.object({
-  credential: z.string()
+  credential: z.string(),
+  referralCode: z.string().optional()
 });
 
 // Sign in (or register) with a Google ID token obtained client-side via
@@ -328,7 +360,7 @@ const googleAuthSchema = z.object({
 // audience is checked against our own GOOGLE_CLIENT_ID.
 router.post('/google', authLimiter, async (req, res) => {
   try {
-    const { credential } = googleAuthSchema.parse(req.body);
+    const { credential, referralCode } = googleAuthSchema.parse(req.body);
 
     if (!process.env.GOOGLE_CLIENT_ID) {
       return res.status(500).json({ error: 'Google Sign-In is not configured on this server' });
@@ -365,8 +397,12 @@ router.post('/google', authLimiter, async (req, res) => {
     } else {
       // Brand-new account via Google -- Google already verified the email,
       // so there's no OTP step to go through.
+      const [ownReferralCode, referredById] = await Promise.all([
+        generateUniqueReferralCode(),
+        resolveReferrerId(referralCode)
+      ]);
       user = await prisma.user.create({
-        data: { email, googleId, isVerified: true }
+        data: { email, googleId, isVerified: true, referralCode: ownReferralCode, referredById }
       });
 
       // Same defaults as a brand-new /register: no modules selected yet
@@ -405,7 +441,8 @@ const githubAuthSchema = z.object({
   // flow -- GitHub's token exchange requires this to match, and since the
   // app is served from more than one domain (local dev + production), the
   // backend can't hardcode a single expected value.
-  redirectUri: z.string()
+  redirectUri: z.string(),
+  referralCode: z.string().optional()
 });
 
 // Sign in (or register) with a GitHub OAuth authorization code obtained
@@ -415,7 +452,7 @@ const githubAuthSchema = z.object({
 // happens server-side only.
 router.post('/github', authLimiter, async (req, res) => {
   try {
-    const { code, redirectUri } = githubAuthSchema.parse(req.body);
+    const { code, redirectUri, referralCode } = githubAuthSchema.parse(req.body);
 
     if (!process.env.GITHUB_CLIENT_ID || !process.env.GITHUB_CLIENT_SECRET) {
       return res.status(500).json({ error: 'GitHub Sign-In is not configured on this server' });
@@ -475,8 +512,12 @@ router.post('/github', authLimiter, async (req, res) => {
         });
       }
     } else {
+      const [ownReferralCode, referredById] = await Promise.all([
+        generateUniqueReferralCode(),
+        resolveReferrerId(referralCode)
+      ]);
       user = await prisma.user.create({
-        data: { email, githubId, isVerified: true }
+        data: { email, githubId, isVerified: true, referralCode: ownReferralCode, referredById }
       });
       await prisma.userProfile.create({
         data: { userId: user.id, selectedModules: [], onboardingComplete: false }

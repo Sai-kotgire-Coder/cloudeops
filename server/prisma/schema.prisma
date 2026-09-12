@@ -42,6 +42,15 @@ model User {
 
   isAdmin Boolean @default(false) @map("is_admin")
 
+  // Referral program -- referralCode is this user's own shareable code
+  // (generated at creation for every user, backfilled for pre-existing
+  // rows in the migration that added this column); referredById is set
+  // at creation time if this user signed up via someone else's code.
+  // The actual reward only fires once, on referredById's onboarding
+  // completion -- see ReferralReward and profile.ts.
+  referralCode  String  @unique @map("referral_code")
+  referredById  String? @map("referred_by_id")
+
   // Plan & Subscription fields
   planType     String    @default("free") @map("plan_type") // "free" or "pro"
   isPro        Boolean   @default(false) @map("is_pro")
@@ -72,8 +81,30 @@ model User {
   notifications      Notification[]
   auditLogs          AuditLog[]
   certificates       Certificate[]
+  referredBy         User?            @relation("Referrals", fields: [referredById], references: [id])
+  referrals          User[]           @relation("Referrals")
+  referralRewardsGiven   ReferralReward[] @relation("Referrer")
+  referralRewardReceived ReferralReward?  @relation("Referee")
 
   @@map("users")
+}
+
+// One row per successfully-activated referral (created when the referred
+// user completes onboarding, not at bare signup, so it can't be farmed by
+// abandoned accounts). Unique on refereeId -- at most one reward per
+// referred user, guarding against the profile-update route firing twice.
+model ReferralReward {
+  id            String   @id @default(uuid())
+  referrerId    String   @map("referrer_id")
+  refereeId     String   @unique @map("referee_id")
+  pointsAwarded Int      @map("points_awarded")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  referrer User @relation("Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  referee  User @relation("Referee", fields: [refereeId], references: [id], onDelete: Cascade)
+
+  @@index([referrerId])
+  @@map("referral_rewards")
 }
 
 // Earned on first crossing a module's completion threshold (computed by
