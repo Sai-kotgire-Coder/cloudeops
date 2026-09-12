@@ -219,10 +219,15 @@ function wrapBroadcastHtml(message: string): string {
 }
 
 // POST /api/admin/broadcast-email -- compose + send to a filtered user set.
-// Responds immediately with the recipient count and sends in the
-// background (not awaited before responding) -- appropriate at this app's
-// scale (tens of users), but would need a real job queue at much larger
-// volume.
+// Sends are awaited (in parallel, not sequential) BEFORE responding. A
+// prior version responded immediately and sent in a "fire and forget"
+// background loop after res.json() -- that works on a long-running local
+// server, but Vercel serverless functions can freeze/tear down execution
+// right after the response is flushed, so that background code never
+// reliably finished (often not at all). Sending in parallel keeps total
+// wall-clock time low enough to stay within the function's execution
+// limit at this app's scale (tens of users); a much larger user base
+// would need a real background job queue instead.
 router.post('/broadcast-email', async (req: AuthRequest, res) => {
   try {
     const { subject, message, target } = broadcastSchema.parse(req.body);
@@ -244,24 +249,28 @@ router.post('/broadcast-email', async (req: AuthRequest, res) => {
     const html = wrapBroadcastHtml(message);
     const text = message;
 
-    res.json({ message: `Sending to ${recipients.length} recipient(s)`, recipientCount: recipients.length });
+    const results = await Promise.allSettled(
+      recipients.map((r) => sendEmail(r.email, subject, html, text))
+    );
+    const sent = results.filter((r) => r.status === 'fulfilled').length;
+    const failed = results.length - sent;
 
-    // Fire-and-forget: the HTTP response above already went out.
-    (async () => {
-      let sent = 0;
-      let failed = 0;
-      for (const r of recipients) {
-        try {
-          await sendEmail(r.email, subject, html, text);
-          sent++;
-        } catch (err) {
-          console.error(`Broadcast email failed for ${r.email}:`, err);
-          failed++;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 300));
+    results.forEach((r, i) => {
+      if (r.status === 'rejected') {
+        console.error(`Broadcast email failed for ${recipients[i].email}:`, r.reason);
       }
-      console.log(`Broadcast complete: sent=${sent} failed=${failed} target=${target}`);
-    })();
+    });
+
+    console.log(`Broadcast complete: sent=${sent} failed=${failed} target=${target}`);
+
+    res.json({
+      message: failed === 0
+        ? `Sent to all ${sent} recipient(s)`
+        : `Sent to ${sent} of ${recipients.length} recipient(s) -- ${failed} failed`,
+      recipientCount: recipients.length,
+      sent,
+      failed,
+    });
   } catch (error) {
     if (error instanceof z.ZodError) return res.status(400).json({ error: 'Invalid input', details: error.errors });
     console.error('Admin broadcast error:', error);
