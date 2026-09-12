@@ -464,6 +464,18 @@ class ApiClient {
     });
   }
 
+  // Monitoring
+  async getMonitoringWorkspace() {
+    return this.request('/monitoring', { method: 'GET' });
+  }
+
+  async updateMonitoringWorkspace(data: any) {
+    return this.request('/monitoring', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
   // Profile
   async getProfile() {
     return this.request('/profile', { method: 'GET' });

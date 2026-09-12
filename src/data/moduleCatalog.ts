@@ -1,7 +1,7 @@
 import {
   Activity, Target, Layers, Container, FileCode, ScrollText, Lock, Boxes,
   GitMerge, Network, Server, GitBranch, Zap, Terminal, Ticket, AlertTriangle,
-  type LucideIcon,
+  LineChart, type LucideIcon,
 } from 'lucide-react';
 
 export interface ModuleDef {
@@ -25,6 +25,7 @@ export const MODULE_CATALOG: ModuleDef[] = [
   { id: 'vault', title: 'Vault Lab', url: '/vault', icon: Lock, description: 'Secrets management: engines, policies, tokens.' },
   { id: 'kubectl', title: 'kubectl Lab', url: '/kubectl', icon: Boxes, description: 'A real terminal for driving Kubernetes-style commands.' },
   { id: 'gitops', title: 'GitOps Lab', url: '/gitops', icon: GitMerge, description: 'Continuous deployment: commit, sync & self-heal.' },
+  { id: 'monitoring', title: 'Monitoring Lab', url: '/monitoring', icon: LineChart, description: 'Build dashboards and alert rules on your live metrics.' },
   { id: 'networking', title: 'Networking', url: '/networking', icon: Network, description: 'Pods, services, load balancers, and ingress rules.' },
   { id: 'instances', title: 'Instances', url: '/instances', icon: Server, description: 'Provision and manage simulated compute instances.' },
   { id: 'cicd', title: 'CI/CD', url: '/cicd', icon: GitBranch, description: 'Build, test, and deploy pipelines.' },

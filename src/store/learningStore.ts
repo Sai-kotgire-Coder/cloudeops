@@ -20,7 +20,8 @@ export type TopicId =
   | 'config_management'
   | 'secrets_management'
   | 'kubectl_cli'
-  | 'gitops';
+  | 'gitops'
+  | 'monitoring';
 
 interface LearningState {
   sidebarOpen: boolean;

@@ -28,6 +28,7 @@ import AnsibleLabPage from "./pages/AnsibleLabPage.tsx";
 import VaultLabPage from "./pages/VaultLabPage.tsx";
 import KubectlLabPage from "./pages/KubectlLabPage.tsx";
 import GitOpsLabPage from "./pages/GitOpsLabPage.tsx";
+import MonitoringLabPage from "./pages/MonitoringLabPage.tsx";
 import MyAccountPage from "./pages/MyAccountPage.tsx";
 import AdminPage from "./pages/AdminPage.tsx";
 import NetworkingPage from "./pages/NetworkingPage.tsx";
@@ -148,6 +149,7 @@ const App = () => {
                             <Route path="/vault" element={<VaultLabPage />} />
                             <Route path="/kubectl" element={<KubectlLabPage />} />
                             <Route path="/gitops" element={<GitOpsLabPage />} />
+                            <Route path="/monitoring" element={<MonitoringLabPage />} />
                             <Route path="/networking" element={<NetworkingPage />} />
                             <Route path="/leaderboard" element={<LeaderboardPage />} />
                             <Route path="/certificates" element={<CertificatesPage />} />

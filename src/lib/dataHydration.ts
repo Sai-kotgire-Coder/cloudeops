@@ -9,6 +9,7 @@ import { useTerraformStore } from '@/store/terraformStore';
 import { useAnsibleStore } from '@/store/ansibleStore';
 import { useVaultStore } from '@/store/vaultStore';
 import { useGitOpsStore } from '@/store/gitopsStore';
+import { useMonitoringStore } from '@/store/monitoringStore';
 import { useProfileStore } from '@/store/profileStore';
 import { useProgressStore } from '@/store/progressStore';
 
@@ -38,6 +39,7 @@ export async function hydrateUserData() {
       ansible,
       vault,
       gitops,
+      monitoring,
       profile,
       plan,
     ] = await Promise.allSettled([
@@ -57,6 +59,7 @@ export async function hydrateUserData() {
       apiClient.getAnsibleWorkspace(),
       apiClient.getVaultWorkspace(),
       apiClient.getGitOpsWorkspace(),
+      apiClient.getMonitoringWorkspace(),
       apiClient.getProfile(),
       apiClient.getPlan(),
     ]);
@@ -78,6 +81,7 @@ export async function hydrateUserData() {
       ansible: ansible.status === 'fulfilled' ? ansible.value : null,
       vault: vault.status === 'fulfilled' ? vault.value : null,
       gitops: gitops.status === 'fulfilled' ? gitops.value : null,
+      monitoring: monitoring.status === 'fulfilled' ? monitoring.value : null,
     });
 
     // Hydrate GameStore with instances, applications, and game state
@@ -194,6 +198,11 @@ export async function hydrateUserData() {
       useGitOpsStore.getState().hydrate(gitops.value);
     }
 
+    // Hydrate MonitoringStore with the saved workspace
+    if (monitoring.status === 'fulfilled' && monitoring.value) {
+      useMonitoringStore.getState().hydrate(monitoring.value as any);
+    }
+
     // Hydrate ProfileStore with personal info, selected modules, and plan.
     // OnboardingGate blocks rendering on this store's `hydrated` flag, so a
     // failed fetch must still flip it (to safe all-modules/onboarding-done
@@ -225,6 +234,7 @@ export async function hydrateUserData() {
       ansible: ansible.status === 'fulfilled' ? ansible.value : null,
       vault: vault.status === 'fulfilled' ? vault.value : null,
       gitops: gitops.status === 'fulfilled' ? gitops.value : null,
+      monitoring: monitoring.status === 'fulfilled' ? monitoring.value : null,
     };
   } catch (error) {
     console.error('❌ Failed to hydrate user data:', error);

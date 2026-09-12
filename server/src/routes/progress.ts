@@ -7,13 +7,18 @@ const router = Router();
 router.use(authMiddleware);
 
 // Completion thresholds per module, checked against counters each lab
-// workspace already tracks for its own purposes. Tunable.
+// workspace already tracks for its own purposes. Tunable. Monitoring needs
+// BOTH a rule and a panel authored, so its "current" is the smaller of the
+// two counters against a target of 2 -- keeps the same single-number
+// current/target shape as every other module without special-casing the
+// response format.
 const MODULE_TARGETS: Record<string, number> = {
   terraform: 3,
   ansible: 3,
   vault: 5,
   gitops: 3,
-  kubectl: 10
+  kubectl: 10,
+  monitoring: 2
 };
 
 function generateCertificateCode(): string {
@@ -28,12 +33,13 @@ router.get('/summary', async (req: AuthRequest, res) => {
   try {
     const userId = req.userId!;
 
-    const [terraform, ansible, vault, gitops, gameState, existingProgress, existingCerts] = await Promise.all([
+    const [terraform, ansible, vault, gitops, gameState, monitoring, existingProgress, existingCerts] = await Promise.all([
       prisma.terraformWorkspace.findUnique({ where: { userId }, select: { appliedCount: true } }),
       prisma.ansibleWorkspace.findUnique({ where: { userId }, select: { runCount: true } }),
       prisma.vaultWorkspace.findUnique({ where: { userId }, select: { accessCount: true } }),
       prisma.gitOpsWorkspace.findUnique({ where: { userId }, select: { syncCount: true } }),
       prisma.gameState.findUnique({ where: { userId }, select: { kubectlCommandCount: true } }),
+      prisma.monitoringWorkspace.findUnique({ where: { userId }, select: { ruleCount: true, panelCount: true } }),
       prisma.userProgress.findMany({ where: { userId } }),
       prisma.certificate.findMany({ where: { userId } })
     ]);
@@ -43,7 +49,8 @@ router.get('/summary', async (req: AuthRequest, res) => {
       ansible: ansible?.runCount ?? 0,
       vault: vault?.accessCount ?? 0,
       gitops: gitops?.syncCount ?? 0,
-      kubectl: gameState?.kubectlCommandCount ?? 0
+      kubectl: gameState?.kubectlCommandCount ?? 0,
+      monitoring: Math.min(monitoring?.ruleCount ?? 0, monitoring?.panelCount ?? 0)
     };
 
     const previouslyCompleted = new Set(

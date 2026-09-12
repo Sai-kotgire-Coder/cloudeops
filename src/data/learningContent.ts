@@ -283,5 +283,20 @@ export const LEARNING_CONTENT: Record<TopicId, LearningTopic> = {
     why_it_matters: 'Manual changes against a live cluster are invisible and unreviewable — nobody can tell what changed, why, or who approved it. GitOps makes every change a commit: reviewable, revertible with `git revert`, and auditable, and it means the cluster can never silently drift from what\'s documented.',
     simulator_context: 'The GitOps Lab lets you link a Git repo path to a real deployed Application, commit version/replica changes, and watch Auto-Sync apply them automatically — then use Simulate Drift to change replicas by hand and watch Self-Heal correct it back, in the background, from any page.',
     pro_tip: 'Auto-Sync and Self-Heal are two different switches: Auto-Sync applies new commits automatically; Self-Heal reverts manual out-of-band changes automatically. Real Argo CD treats them as separate settings for exactly this reason.'
+  },
+  monitoring: {
+    id: 'monitoring',
+    title: 'Monitoring: Dashboards & Alert Rules',
+    beginner: 'Monitoring means continuously collecting metrics from your running system (traffic, CPU, error rate, latency) and giving humans two things: dashboards to see the current state at a glance, and alert rules that page someone the moment a metric crosses a threshold that matters.',
+    how_it_works: [
+      'A metrics system (like Prometheus) scrapes numeric time-series data from every service on an interval.',
+      'A dashboard tool (like Grafana) queries that data and renders it as graphs, so an on-call engineer can see trends, not just a single number.',
+      'An alert rule is a query plus a threshold: "if error rate stays above 5% for 5 minutes, fire."',
+      'When a rule crosses its threshold, it "fires" -- creating an active alert that stays open until the underlying metric recovers, at which point it auto-resolves.',
+      'Good alerting rules are specific enough to page only on real problems -- too sensitive and people learn to ignore pages; too loose and real incidents go unnoticed.'
+    ],
+    why_it_matters: 'Without monitoring, the first sign of an outage is a customer complaint. Dashboards let you catch a slow-building problem (creeping latency, a memory leak) before it becomes an outage, and alert rules mean you find out about a sudden one (a crash, a traffic spike) in seconds instead of hours.',
+    simulator_context: 'The Monitoring Lab lets you build dashboard panels charting your simulator\'s own live metrics (traffic, CPU, error rate, latency) and author alert rules against them -- crossing a rule\'s threshold creates a real Alert, visible on the Issues page, exactly like any other incident in this simulator.',
+    pro_tip: 'Real alerting systems almost always require a threshold to be breached "for" a duration (e.g. 5 minutes), not instantly on a single reading -- this avoids paging someone over one noisy data point. Think about what duration would make each of your rules meaningful rather than noisy.'
   }
 };
