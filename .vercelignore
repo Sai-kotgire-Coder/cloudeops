@@ -3,7 +3,7 @@ node_modules
 .env.local
 .env
 bun.lock
-*.md
+/*.md
 .DS_Store
 playwright-fixture.ts
 playwright.config.ts
