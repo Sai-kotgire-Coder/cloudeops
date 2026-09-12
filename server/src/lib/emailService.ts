@@ -76,6 +76,19 @@ export async function sendPasswordResetEmail(email: string, otp: string): Promis
   }
 }
 
+// Generic send, for anything that isn't an OTP code (e.g. bulk campaign
+// emails in server/scripts/) -- reuses the same transporter/from-address
+// as the rest of this file so behavior stays consistent in one place.
+export async function sendEmail(to: string, subject: string, html: string, text: string): Promise<void> {
+  await transporter.sendMail({
+    from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+    to,
+    subject,
+    html,
+    text
+  });
+}
+
 // Verify email configuration on startup
 export async function verifyEmailConfig(): Promise<boolean> {
   try {
