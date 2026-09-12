@@ -19,6 +19,7 @@ import ansibleRoutes from './routes/ansible.js';
 import vaultRoutes from './routes/vault.js';
 import gitopsRoutes from './routes/gitops.js';
 import profileRoutes from './routes/profile.js';
+import adminRoutes from './routes/admin.js';
 
 const app = express();
 
@@ -98,6 +99,7 @@ app.use('/api/ansible', ansibleRoutes);
 app.use('/api/vault', vaultRoutes);
 app.use('/api/gitops', gitopsRoutes);
 app.use('/api/profile', profileRoutes);
+app.use('/api/admin', adminRoutes);
 
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('Error:', err);

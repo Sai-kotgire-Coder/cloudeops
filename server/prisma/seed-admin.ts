@@ -14,6 +14,7 @@ async function main() {
       isVerified: true,
       planType: 'pro',
       isPro: true,
+      isAdmin: true,
     },
     create: {
       email: EMAIL,
@@ -21,6 +22,7 @@ async function main() {
       isVerified: true,
       planType: 'pro',
       isPro: true,
+      isAdmin: true,
     },
   });
 

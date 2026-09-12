@@ -34,7 +34,9 @@ model User {
   // user's current one, which is what actually revokes already-issued
   // tokens (a bare JWT signature check can't do this on its own).
   tokenVersion Int @default(0) @map("token_version")
-  
+
+  isAdmin Boolean @default(false) @map("is_admin")
+
   // Plan & Subscription fields
   planType     String    @default("free") @map("plan_type") // "free" or "pro"
   isPro        Boolean   @default(false) @map("is_pro")

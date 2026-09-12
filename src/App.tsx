@@ -29,6 +29,7 @@ import VaultLabPage from "./pages/VaultLabPage.tsx";
 import KubectlLabPage from "./pages/KubectlLabPage.tsx";
 import GitOpsLabPage from "./pages/GitOpsLabPage.tsx";
 import MyAccountPage from "./pages/MyAccountPage.tsx";
+import AdminPage from "./pages/AdminPage.tsx";
 import NetworkingPage from "./pages/NetworkingPage.tsx";
 import PricingPage from "./pages/PricingPage.tsx";
 import LoginPage from "./pages/LoginPage.tsx";
@@ -46,6 +47,7 @@ import { ScenarioBanner } from "@/components/game/ScenarioBanner";
 import { HintDisplay } from "@/components/scenario/HintDisplay";
 import { GitOpsReconciler } from "@/components/gitops/GitOpsReconciler";
 import { OnboardingGate } from "@/components/account/OnboardingGate";
+import { AdminRoute } from "@/components/auth/AdminRoute";
 import { SessionGuard } from "@/components/auth/SessionGuard";
 
 const queryClient = new QueryClient();
@@ -121,6 +123,7 @@ const App = () => {
                             <Route path="/" element={<Index />} />
                             <Route path="/pricing" element={<PricingPage />} />
                             <Route path="/account" element={<MyAccountPage />} />
+                            <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
                             <Route path="/apps" element={<ApplicationsPage />} />
                             <Route path="/apps/:id" element={<ManageApplicationPage />} />
                             <Route path="/instances" element={<InstancesPage />} />

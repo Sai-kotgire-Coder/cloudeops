@@ -187,6 +187,7 @@ router.post('/verify-otp', authLimiter, async (req, res) => {
         id: user.id,
         email: user.email,
         isVerified: true,
+        isAdmin: user.isAdmin,
         createdAt: user.createdAt
       }
     });
@@ -287,6 +288,7 @@ router.post('/login', authLimiter, async (req, res) => {
         id: user.id,
         email: user.email,
         isVerified: user.isVerified,
+        isAdmin: user.isAdmin,
         createdAt: user.createdAt
       }
     });
@@ -397,6 +399,7 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res) => {
         id: true,
         email: true,
         isVerified: true,
+        isAdmin: true,
         createdAt: true
       }
     });

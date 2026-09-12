@@ -19,6 +19,7 @@ export interface User {
   id: string;
   email: string;
   isVerified?: boolean;
+  isAdmin?: boolean;
   createdAt: string;
 }
 
@@ -496,6 +497,38 @@ class ApiClient {
     return this.request('/payment/verify', {
       method: 'POST',
       body: JSON.stringify({ razorpayOrderId, razorpayPaymentId, razorpaySignature }),
+    });
+  }
+
+  // Admin
+  async getAdminStats(): Promise<any> {
+    return this.request('/admin/stats', { method: 'GET' });
+  }
+
+  async getAdminUsers(params: { search?: string; plan?: string; module?: string; activity?: string; page?: number; limit?: number } = {}): Promise<any> {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') query.set(key, String(value));
+    });
+    const qs = query.toString();
+    return this.request(`/admin/users${qs ? `?${qs}` : ''}`, { method: 'GET' });
+  }
+
+  async getAdminUserDetail(id: string): Promise<any> {
+    return this.request(`/admin/users/${id}`, { method: 'GET' });
+  }
+
+  async updateUserPlan(id: string, isPro: boolean): Promise<any> {
+    return this.request(`/admin/users/${id}/plan`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isPro }),
+    });
+  }
+
+  async sendBroadcastEmail(subject: string, message: string, target: 'all' | 'inactive' | 'pro' | 'free'): Promise<any> {
+    return this.request('/admin/broadcast-email', {
+      method: 'POST',
+      body: JSON.stringify({ subject, message, target }),
     });
   }
 

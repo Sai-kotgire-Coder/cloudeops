@@ -1,4 +1,4 @@
-import { Zap, LogOut, User, Rocket } from 'lucide-react';
+import { Zap, LogOut, User, Rocket, ShieldAlert } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
@@ -138,6 +138,30 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+        {user?.isAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Admin</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={location.pathname === '/admin'}>
+                    <NavLink
+                      to="/admin"
+                      end
+                      className="hover:bg-sidebar-accent/50"
+                      activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
+                    >
+                      <div className="flex items-center flex-1 gap-2">
+                        <ShieldAlert className="h-4 w-4" />
+                        {!collapsed && <span>Admin Panel</span>}
+                      </div>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
       <SidebarFooter className="p-3 border-t border-sidebar-border">
         {!collapsed ? (
