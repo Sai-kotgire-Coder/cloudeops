@@ -4,7 +4,6 @@ import { useThemeStore } from '@/store/themeStore';
 import { Bell, Pause, Play, Trophy, Moon, Sun, DollarSign, GraduationCap } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
-import { SidebarTrigger } from '@/components/ui/sidebar';
 import { HintButton } from './HintButton';
 import { InfoTooltip } from '@/components/learning/InfoTooltip';
 
@@ -24,8 +23,6 @@ export const TopNavBar = () => {
 
   return (
     <header className="h-14 border-b border-border bg-card flex items-center px-4 gap-3 relative z-50">
-      <SidebarTrigger className="mr-1" />
-
       {/* Scenario */}
       <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-full bg-secondary text-secondary-foreground text-sm">
         <span className="text-muted-foreground">Scenario:</span>
