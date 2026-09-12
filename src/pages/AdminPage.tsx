@@ -56,7 +56,7 @@ export default function AdminPage() {
             </TabsContent>
 
             <TabsContent value="notify" className="mt-6">
-              <div className="max-w-2xl bg-card border border-border rounded-xl p-6">
+              <div className="max-w-3xl bg-card border border-border rounded-xl p-6">
                 <BroadcastEmailPanel stats={stats} />
               </div>
             </TabsContent>

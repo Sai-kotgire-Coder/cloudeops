@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Send, Loader2 } from 'lucide-react';
+import { Send, Loader2, Check, FileEdit } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { apiClient } from '@/lib/apiClient';
+import { EMAIL_TEMPLATES, CUSTOM_TEMPLATE_ID } from '@/data/emailTemplates';
 import type { AdminStatsData } from './AdminStats';
 
 type Target = 'all' | 'inactive' | 'pro' | 'free';
@@ -23,11 +24,26 @@ const TARGET_LABELS: Record<Target, string> = {
 };
 
 export const BroadcastEmailPanel = ({ stats }: { stats: AdminStatsData | null }) => {
+  const [templateId, setTemplateId] = useState<string>(CUSTOM_TEMPLATE_ID);
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [target, setTarget] = useState<Target>('all');
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [sending, setSending] = useState(false);
+
+  const handleSelectTemplate = (id: string) => {
+    setTemplateId(id);
+    if (id === CUSTOM_TEMPLATE_ID) {
+      setSubject('');
+      setMessage('');
+      return;
+    }
+    const template = EMAIL_TEMPLATES.find((t) => t.id === id);
+    if (template) {
+      setSubject(template.subject);
+      setMessage(template.message);
+    }
+  };
 
   const targetCount = stats
     ? { all: stats.verifiedUsers, inactive: stats.inactiveUsers, pro: stats.proUsers, free: stats.freeUsers }[target]
@@ -42,6 +58,7 @@ export const BroadcastEmailPanel = ({ stats }: { stats: AdminStatsData | null })
       toast.success(result.message);
       setSubject('');
       setMessage('');
+      setTemplateId(CUSTOM_TEMPLATE_ID);
       setConfirmOpen(false);
     } catch (err: any) {
       toast.error(err.message || 'Failed to send broadcast');
@@ -67,6 +84,51 @@ export const BroadcastEmailPanel = ({ stats }: { stats: AdminStatsData | null })
         {targetCount !== null && (
           <p className="text-xs text-muted-foreground">~{targetCount} recipient{targetCount === 1 ? '' : 's'}</p>
         )}
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>Template</Label>
+        <p className="text-xs text-muted-foreground -mt-1 mb-1">
+          Pick a starting point, or write your own from scratch -- either way you can edit before sending.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => handleSelectTemplate(CUSTOM_TEMPLATE_ID)}
+            className={`text-left rounded-lg border p-3 transition-colors ${
+              templateId === CUSTOM_TEMPLATE_ID
+                ? 'border-primary bg-primary/5'
+                : 'border-border hover:border-muted-foreground/40'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-medium flex items-center gap-1.5">
+                <FileEdit className="w-3.5 h-3.5" />
+                Custom
+              </span>
+              {templateId === CUSTOM_TEMPLATE_ID && <Check className="w-3.5 h-3.5 text-primary shrink-0" />}
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">Write your own message from a blank draft</p>
+          </button>
+          {EMAIL_TEMPLATES.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => handleSelectTemplate(t.id)}
+              className={`text-left rounded-lg border p-3 transition-colors ${
+                templateId === t.id
+                  ? 'border-primary bg-primary/5'
+                  : 'border-border hover:border-muted-foreground/40'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-medium">{t.label}</span>
+                {templateId === t.id && <Check className="w-3.5 h-3.5 text-primary shrink-0" />}
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">{t.description}</p>
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="space-y-1.5">
