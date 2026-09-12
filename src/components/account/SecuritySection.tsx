@@ -18,6 +18,7 @@ function applyRefreshedToken(token: string) {
 }
 
 export const SecuritySection = () => {
+  const hasPassword = useAuthStore((s) => s.user?.hasPassword ?? true);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -48,10 +49,10 @@ export const SecuritySection = () => {
 
     setSaving(true);
     try {
-      const { token } = await apiClient.changePassword(currentPassword, newPassword);
+      const { token } = await apiClient.changePassword(hasPassword ? currentPassword : undefined, newPassword);
       applyRefreshedToken(token);
-      toast.success('Password changed', {
-        description: 'Every other signed-in device has been logged out.',
+      toast.success(hasPassword ? 'Password changed' : 'Password set', {
+        description: hasPassword ? 'Every other signed-in device has been logged out.' : 'You can now also sign in with this password, not just Google.',
       });
       setCurrentPassword('');
       setNewPassword('');
@@ -85,17 +86,25 @@ export const SecuritySection = () => {
           </Alert>
         )}
 
-        <div className="space-y-1.5">
-          <Label htmlFor="currentPassword">Current password</Label>
-          <Input
-            id="currentPassword"
-            type="password"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            required
-            disabled={saving}
-          />
-        </div>
+        {!hasPassword && (
+          <p className="text-xs text-muted-foreground -mt-1">
+            Your account currently signs in with Google only. Set a password below to also enable email/password sign-in.
+          </p>
+        )}
+
+        {hasPassword && (
+          <div className="space-y-1.5">
+            <Label htmlFor="currentPassword">Current password</Label>
+            <Input
+              id="currentPassword"
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              required
+              disabled={saving}
+            />
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
@@ -142,7 +151,7 @@ export const SecuritySection = () => {
 
         <Button type="submit" disabled={saving} className="gap-2">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
-          {saving ? 'Changing...' : 'Change Password'}
+          {saving ? 'Saving...' : hasPassword ? 'Change Password' : 'Set Password'}
         </Button>
       </form>
 

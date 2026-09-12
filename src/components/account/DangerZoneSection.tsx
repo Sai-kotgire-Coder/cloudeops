@@ -20,6 +20,7 @@ import { useAuthStore } from '@/store/authStore';
 
 export const DangerZoneSection = () => {
   const navigate = useNavigate();
+  const hasPassword = useAuthStore((s) => s.user?.hasPassword ?? true);
   const [exporting, setExporting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [password, setPassword] = useState('');
@@ -47,13 +48,13 @@ export const DangerZoneSection = () => {
     }
   };
 
-  const canDelete = password.length > 0 && confirmText === 'DELETE';
+  const canDelete = (hasPassword ? password.length > 0 : true) && confirmText === 'DELETE';
 
   const handleDelete = async () => {
     setError('');
     setDeleting(true);
     try {
-      await apiClient.deleteAccount(password);
+      await apiClient.deleteAccount(hasPassword ? password : undefined);
       toast.success('Account deleted');
       useAuthStore.getState().logout();
       navigate('/login');
@@ -124,16 +125,18 @@ export const DangerZoneSection = () => {
           {error && <p className="text-sm text-destructive">{error}</p>}
 
           <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="deletePassword">Enter your password</Label>
-              <Input
-                id="deletePassword"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={deleting}
-              />
-            </div>
+            {hasPassword && (
+              <div className="space-y-1.5">
+                <Label htmlFor="deletePassword">Enter your password</Label>
+                <Input
+                  id="deletePassword"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={deleting}
+                />
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="deleteConfirmText">
                 Type <span className="font-mono font-semibold">DELETE</span> to confirm

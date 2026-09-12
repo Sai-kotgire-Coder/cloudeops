@@ -2,10 +2,13 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
+import { OAuth2Client } from 'google-auth-library';
 import prisma from '../lib/prisma.js';
 import { generateOTP, sendOTPEmail, sendPasswordResetEmail } from '../lib/emailService.js';
 import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 import { authLimiter, emailLimiter } from '../middleware/rateLimit.js';
+
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const router = Router();
 
@@ -55,12 +58,17 @@ const resetPasswordSchema = z.object({
 });
 
 const changePasswordSchema = z.object({
-  currentPassword: z.string(),
+  // Optional: a Google Sign-In account with no password yet is setting one
+  // for the first time, so there's nothing to verify against.
+  currentPassword: z.string().optional(),
   newPassword: passwordSchema
 });
 
 const deleteAccountSchema = z.object({
-  password: z.string()
+  // Optional: a Google Sign-In account with no password has nothing to
+  // confirm with -- being authenticated with a valid, non-revoked token is
+  // treated as sufficient proof for those accounts.
+  password: z.string().optional()
 });
 
 // Register endpoint - Creates user and sends OTP
@@ -188,6 +196,7 @@ router.post('/verify-otp', authLimiter, async (req, res) => {
         email: user.email,
         isVerified: true,
         isAdmin: user.isAdmin,
+        hasPassword: !!user.passwordHash,
         createdAt: user.createdAt
       }
     });
@@ -262,6 +271,12 @@ router.post('/login', authLimiter, async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    if (!user.passwordHash) {
+      return res.status(401).json({
+        error: 'This account uses Google Sign-In. Continue with Google instead of a password, or set a password from My Account after signing in.'
+      });
+    }
+
     // Verify password
     const isValidPassword = await bcrypt.compare(password, user.passwordHash);
 
@@ -289,6 +304,7 @@ router.post('/login', authLimiter, async (req, res) => {
         email: user.email,
         isVerified: user.isVerified,
         isAdmin: user.isAdmin,
+        hasPassword: !!user.passwordHash,
         createdAt: user.createdAt
       }
     });
@@ -298,6 +314,88 @@ router.post('/login', authLimiter, async (req, res) => {
     }
     console.error('Login error:', error);
     res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+const googleAuthSchema = z.object({
+  credential: z.string()
+});
+
+// Sign in (or register) with a Google ID token obtained client-side via
+// Google Identity Services. Verifying the token here (rather than trusting
+// whatever the client sends) is what actually proves the request came from
+// Google -- the signature is checked against Google's public keys and the
+// audience is checked against our own GOOGLE_CLIENT_ID.
+router.post('/google', authLimiter, async (req, res) => {
+  try {
+    const { credential } = googleAuthSchema.parse(req.body);
+
+    if (!process.env.GOOGLE_CLIENT_ID) {
+      return res.status(500).json({ error: 'Google Sign-In is not configured on this server' });
+    }
+
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID
+    });
+    const payload = ticket.getPayload();
+
+    if (!payload?.email) {
+      return res.status(400).json({ error: 'Google did not return an email for this account' });
+    }
+    if (!payload.email_verified) {
+      return res.status(400).json({ error: 'Your Google email address is not verified' });
+    }
+
+    const email = payload.email;
+    const googleId = payload.sub;
+
+    let user = await prisma.user.findUnique({ where: { email } });
+
+    if (user) {
+      // Existing account (password-based or already Google-linked) -- link
+      // this Google identity if it isn't already, since Google has
+      // independently verified the same email address we already have.
+      if (!user.googleId) {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { googleId, isVerified: true }
+        });
+      }
+    } else {
+      // Brand-new account via Google -- Google already verified the email,
+      // so there's no OTP step to go through.
+      user = await prisma.user.create({
+        data: { email, googleId, isVerified: true }
+      });
+
+      // Same defaults as a brand-new /register: no modules selected yet
+      // and onboarding incomplete, so the forced first-run setup screen
+      // still applies to Google sign-ups too.
+      await prisma.userProfile.create({
+        data: { userId: user.id, selectedModules: [], onboardingComplete: false }
+      });
+    }
+
+    const token = signToken(user.id, user.email, user.tokenVersion);
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        isVerified: user.isVerified,
+        isAdmin: user.isAdmin,
+        hasPassword: !!user.passwordHash,
+        createdAt: user.createdAt
+      }
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Invalid input', details: error.errors });
+    }
+    console.error('Google auth error:', error);
+    res.status(401).json({ error: 'Google sign-in failed' });
   }
 });
 
@@ -400,7 +498,8 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res) => {
         email: true,
         isVerified: true,
         isAdmin: true,
-        createdAt: true
+        createdAt: true,
+        passwordHash: true
       }
     });
 
@@ -408,7 +507,8 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    res.json({ user });
+    const { passwordHash, ...safeUser } = user;
+    res.json({ user: { ...safeUser, hasPassword: !!passwordHash } });
   } catch (error) {
     console.error('Get current user error:', error);
     res.status(500).json({ error: 'Failed to fetch user' });
@@ -428,14 +528,19 @@ router.post('/change-password', authMiddleware, authLimiter, async (req: AuthReq
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const isValidPassword = await bcrypt.compare(currentPassword, user.passwordHash);
-    if (!isValidPassword) {
-      // 400, not 401 -- the bearer token is perfectly valid here (it already
-      // passed authMiddleware); this is a wrong-input rejection, not an auth
-      // failure. The client treats any 401 on an authenticated call as a
-      // revoked session and force-logs-out, which would be wrong here.
-      return res.status(400).json({ error: 'Current password is incorrect' });
+    if (user.passwordHash) {
+      // Account already has a password -- must prove you know it.
+      if (!currentPassword || !(await bcrypt.compare(currentPassword, user.passwordHash))) {
+        // 400, not 401 -- the bearer token is perfectly valid here (it
+        // already passed authMiddleware); this is a wrong-input rejection,
+        // not an auth failure. The client treats any 401 on an
+        // authenticated call as a revoked session and force-logs-out,
+        // which would be wrong here.
+        return res.status(400).json({ error: 'Current password is incorrect' });
+      }
     }
+    // else: Google-only account setting a password for the first time --
+    // being logged in (a valid, non-revoked token) is proof enough.
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
     const updated = await prisma.user.update({
@@ -535,13 +640,15 @@ router.delete('/account', authMiddleware, async (req: AuthRequest, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const isValidPassword = await bcrypt.compare(password, user.passwordHash);
-    if (!isValidPassword) {
-      // 400, not 401 -- same reasoning as change-password above: a valid,
-      // authenticated request with a wrong confirmation value, not a stale
-      // or invalid token.
-      return res.status(400).json({ error: 'Incorrect password' });
+    if (user.passwordHash) {
+      if (!password || !(await bcrypt.compare(password, user.passwordHash))) {
+        // 400, not 401 -- same reasoning as change-password above: a valid,
+        // authenticated request with a wrong confirmation value, not a
+        // stale or invalid token.
+        return res.status(400).json({ error: 'Incorrect password' });
+      }
     }
+    // else: Google-only account -- no password to confirm with.
 
     await prisma.user.delete({ where: { id: user.id } });
 

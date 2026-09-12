@@ -20,6 +20,7 @@ export interface User {
   email: string;
   isVerified?: boolean;
   isAdmin?: boolean;
+  hasPassword?: boolean;
   createdAt: string;
 }
 
@@ -124,6 +125,21 @@ class ApiClient {
     return response.json();
   }
 
+  async googleLogin(credential: string): Promise<AuthResponse> {
+    const response = await fetch(`${API_BASE_URL}/auth/google`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credential }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error || 'Google sign-in failed');
+    }
+
+    return response.json();
+  }
+
   async forgotPassword(email: string): Promise<{ message: string }> {
     const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
       method: 'POST',
@@ -154,7 +170,7 @@ class ApiClient {
     return response.json();
   }
 
-  async changePassword(currentPassword: string, newPassword: string): Promise<{ message: string; token: string }> {
+  async changePassword(currentPassword: string | undefined, newPassword: string): Promise<{ message: string; token: string }> {
     return this.request('/auth/change-password', {
       method: 'POST',
       body: JSON.stringify({ currentPassword, newPassword }),
@@ -165,7 +181,7 @@ class ApiClient {
     return this.request('/auth/logout-all', { method: 'POST' });
   }
 
-  async deleteAccount(password: string): Promise<{ message: string }> {
+  async deleteAccount(password?: string): Promise<{ message: string }> {
     return this.request('/auth/account', {
       method: 'DELETE',
       body: JSON.stringify({ password }),

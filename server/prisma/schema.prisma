@@ -17,7 +17,11 @@ datasource db {
 model User {
   id           String    @id @default(uuid())
   email        String    @unique
-  passwordHash String    @map("password_hash")
+  // Nullable: a Google Sign-In account has no password until the user
+  // explicitly sets one (e.g. via My Account's change-password form, which
+  // skips the "current password" check when this is null).
+  passwordHash String?   @map("password_hash")
+  googleId     String?   @unique @map("google_id")
   otpCode      String?   @map("otp_code")
   otpExpiry    DateTime? @map("otp_expiry")
   isVerified   Boolean   @default(false) @map("is_verified")
