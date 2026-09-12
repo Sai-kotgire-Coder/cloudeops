@@ -558,6 +558,11 @@ class ApiClient {
     return this.request(`/admin/audit-log?page=${page}`, { method: 'GET' });
   }
 
+  // Admin analytics
+  async getAdminAnalytics(): Promise<any> {
+    return this.request('/admin/analytics', { method: 'GET' });
+  }
+
   async createPaymentOrder(amount: number, planDurationDays: number): Promise<any> {
     return this.request('/payment/create-order', {
       method: 'POST',

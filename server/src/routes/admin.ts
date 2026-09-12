@@ -54,6 +54,87 @@ router.get('/stats', async (_req, res) => {
   }
 });
 
+const ANALYTICS_WINDOW_DAYS = 30;
+
+function dailyBuckets(days: number): Record<string, number> {
+  const buckets: Record<string, number> = {};
+  const now = Date.now();
+  for (let i = days - 1; i >= 0; i--) {
+    const day = new Date(now - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    buckets[day] = 0;
+  }
+  return buckets;
+}
+
+function bucketsToSeries(buckets: Record<string, number>): { date: string; count: number }[] {
+  return Object.entries(buckets).map(([date, count]) => ({ date, count }));
+}
+
+// GET /api/admin/analytics -- 30-day trends + conversion/completion rates.
+// Depends on the progress-tracking feature for module completion rates
+// (UserProgress rows), and reuses the same signups-histogram shape as
+// GET /stats but over a longer window.
+router.get('/analytics', async (_req, res) => {
+  try {
+    const windowStart = new Date(Date.now() - ANALYTICS_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+
+    const [totalUsers, users, gameStates, payments, completedProgress] = await Promise.all([
+      prisma.user.count(),
+      prisma.user.findMany({ where: { createdAt: { gte: windowStart } }, select: { createdAt: true } }),
+      prisma.gameState.findMany({ where: { updatedAt: { gte: windowStart } }, select: { updatedAt: true } }),
+      prisma.payment.findMany({
+        where: { status: 'completed', createdAt: { gte: windowStart } },
+        select: { createdAt: true, amount: true }
+      }),
+      prisma.userProgress.groupBy({ by: ['module'], where: { completed: true }, _count: { _all: true } })
+    ]);
+
+    const signupBuckets = dailyBuckets(ANALYTICS_WINDOW_DAYS);
+    users.forEach((u) => {
+      const day = u.createdAt.toISOString().slice(0, 10);
+      if (day in signupBuckets) signupBuckets[day]++;
+    });
+
+    // Approximates "last-active day" trend -- GameState has one row per
+    // user (its updatedAt is overwritten on every save), not a historical
+    // per-day activity log, so this reflects each user's most recent save,
+    // not true cumulative daily-actives history.
+    const dauBuckets = dailyBuckets(ANALYTICS_WINDOW_DAYS);
+    gameStates.forEach((g) => {
+      const day = g.updatedAt.toISOString().slice(0, 10);
+      if (day in dauBuckets) dauBuckets[day]++;
+    });
+
+    const revenueBuckets = dailyBuckets(ANALYTICS_WINDOW_DAYS);
+    payments.forEach((p) => {
+      const day = p.createdAt.toISOString().slice(0, 10);
+      if (day in revenueBuckets) revenueBuckets[day] += p.amount;
+    });
+
+    const moduleCompletionRates = completedProgress.map((row: { module: string; _count: { _all: number } }) => ({
+      module: row.module,
+      completedCount: row._count._all,
+      completionRate: totalUsers > 0 ? row._count._all / totalUsers : 0
+    }));
+
+    const proUsers = await prisma.user.count({ where: { isPro: true } });
+
+    res.json({
+      windowDays: ANALYTICS_WINDOW_DAYS,
+      signups: bucketsToSeries(signupBuckets),
+      dailyActive: bucketsToSeries(dauBuckets),
+      revenuePaise: bucketsToSeries(revenueBuckets),
+      moduleCompletionRates,
+      proConversionRate: totalUsers > 0 ? proUsers / totalUsers : 0,
+      totalUsers,
+      proUsers
+    });
+  } catch (error) {
+    console.error('Admin analytics error:', error);
+    res.status(500).json({ error: 'Failed to load analytics' });
+  }
+});
+
 // GET /api/admin/users -- searchable/filterable user list
 router.get('/users', async (req, res) => {
   try {

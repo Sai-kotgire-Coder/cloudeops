@@ -3,6 +3,7 @@ import { ShieldAlert, Loader2 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { apiClient } from '@/lib/apiClient';
 import { AdminStats, type AdminStatsData } from '@/components/admin/AdminStats';
+import { AdminAnalytics, type AdminAnalyticsData } from '@/components/admin/AdminAnalytics';
 import { UsersTable } from '@/components/admin/UsersTable';
 import { BroadcastEmailPanel } from '@/components/admin/BroadcastEmailPanel';
 import { AuditLogTable } from '@/components/admin/AuditLogTable';
@@ -11,6 +12,8 @@ import { toast } from 'sonner';
 export default function AdminPage() {
   const [stats, setStats] = useState<AdminStatsData | null>(null);
   const [loadingStats, setLoadingStats] = useState(true);
+  const [analytics, setAnalytics] = useState<AdminAnalyticsData | null>(null);
+  const [loadingAnalytics, setLoadingAnalytics] = useState(true);
 
   const loadStats = () => {
     setLoadingStats(true);
@@ -21,7 +24,17 @@ export default function AdminPage() {
       .finally(() => setLoadingStats(false));
   };
 
+  const loadAnalytics = () => {
+    setLoadingAnalytics(true);
+    apiClient
+      .getAdminAnalytics()
+      .then(setAnalytics)
+      .catch((err) => toast.error(err.message || 'Failed to load analytics'))
+      .finally(() => setLoadingAnalytics(false));
+  };
+
   useEffect(loadStats, []);
+  useEffect(loadAnalytics, []);
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
@@ -38,6 +51,7 @@ export default function AdminPage() {
           <Tabs defaultValue="overview">
             <TabsList>
               <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="analytics">Analytics</TabsTrigger>
               <TabsTrigger value="users">Users</TabsTrigger>
               <TabsTrigger value="notify">Send Notification</TabsTrigger>
               <TabsTrigger value="audit">Audit Log</TabsTrigger>
@@ -50,6 +64,16 @@ export default function AdminPage() {
                 </div>
               ) : (
                 <AdminStats stats={stats} />
+              )}
+            </TabsContent>
+
+            <TabsContent value="analytics" className="mt-6">
+              {loadingAnalytics || !analytics ? (
+                <div className="flex items-center justify-center py-16">
+                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <AdminAnalytics data={analytics} />
               )}
             </TabsContent>
 
