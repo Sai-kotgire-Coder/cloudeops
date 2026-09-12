@@ -580,6 +580,50 @@ class ApiClient {
     return this.request('/admin/analytics', { method: 'GET' });
   }
 
+  // Community submissions (documentation/research papers/blogs)
+  async submitCommunityContent(data: {
+    title: string;
+    type: 'documentation' | 'research_paper' | 'blog';
+    summary: string;
+    content: string;
+    externalUrl?: string;
+  }): Promise<any> {
+    return this.request('/community-submissions', { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  async getMyCommunitySubmissions(): Promise<any> {
+    return this.request('/community-submissions/mine', { method: 'GET' });
+  }
+
+  async getCommunitySubmissions(params: { type?: string; page?: number; limit?: number } = {}): Promise<any> {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') query.set(key, String(value));
+    });
+    const qs = query.toString();
+    return this.request(`/community-submissions${qs ? `?${qs}` : ''}`, { method: 'GET' });
+  }
+
+  async getCommunitySubmission(id: string): Promise<any> {
+    return this.request(`/community-submissions/${id}`, { method: 'GET' });
+  }
+
+  async getAdminSubmissions(params: { status?: string; page?: number; limit?: number } = {}): Promise<any> {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') query.set(key, String(value));
+    });
+    const qs = query.toString();
+    return this.request(`/admin/submissions${qs ? `?${qs}` : ''}`, { method: 'GET' });
+  }
+
+  async reviewSubmission(id: string, status: 'approved' | 'rejected', reviewNote?: string): Promise<any> {
+    return this.request(`/admin/submissions/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status, reviewNote })
+    });
+  }
+
   async createPaymentOrder(amount: number, planDurationDays: number): Promise<any> {
     return this.request('/payment/create-order', {
       method: 'POST',

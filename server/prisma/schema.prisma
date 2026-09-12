@@ -86,8 +86,37 @@ model User {
   referrals          User[]           @relation("Referrals")
   referralRewardsGiven   ReferralReward[] @relation("Referrer")
   referralRewardReceived ReferralReward?  @relation("Referee")
+  submissions            CommunitySubmission[] @relation("SubmissionAuthor")
+  reviewedSubmissions    CommunitySubmission[] @relation("SubmissionReviewer")
 
   @@map("users")
+}
+
+// User-submitted documentation/research-paper/blog content, moderated by
+// an admin before it's visible to anyone else. Approving one broadcasts a
+// Notification to every user, the same bulk-notify pattern already used
+// for the admin broadcast-email flow.
+model CommunitySubmission {
+  id           String    @id @default(uuid())
+  authorId     String    @map("author_id")
+  title        String
+  type         String    // 'documentation' | 'research_paper' | 'blog'
+  summary      String    @db.Text
+  content      String    @db.Text // markdown body, rendered with the existing DocsMarkdown component
+  externalUrl  String?   @map("external_url")
+  status       String    @default("pending") // 'pending' | 'approved' | 'rejected'
+  reviewNote   String?   @map("review_note") @db.Text
+  reviewedById String?   @map("reviewed_by_id")
+  reviewedAt   DateTime? @map("reviewed_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  author     User  @relation("SubmissionAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  reviewedBy User? @relation("SubmissionReviewer", fields: [reviewedById], references: [id])
+
+  @@index([authorId])
+  @@index([status])
+  @@map("community_submissions")
 }
 
 // One row per successfully-activated referral (created when the referred

@@ -409,4 +409,94 @@ router.get('/audit-log', async (req, res) => {
   }
 });
 
+// GET /api/admin/submissions -- moderation queue for user-submitted
+// community content (documentation/research papers/blogs), default filter
+// 'pending' since that's what actually needs admin attention.
+router.get('/submissions', async (req, res) => {
+  try {
+    const status = (req.query.status as string) || 'pending';
+    const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string, 10) || 20));
+
+    const [submissions, total] = await Promise.all([
+      prisma.communitySubmission.findMany({
+        where: { status },
+        include: { author: { select: { email: true } } },
+        orderBy: { createdAt: 'asc' },
+        skip: (page - 1) * limit,
+        take: limit
+      }),
+      prisma.communitySubmission.count({ where: { status } })
+    ]);
+
+    res.json({
+      submissions: submissions.map((s: any) => ({ ...s, authorEmail: s.author.email, author: undefined })),
+      total,
+      page,
+      totalPages: Math.max(1, Math.ceil(total / limit))
+    });
+  } catch (error) {
+    console.error('Admin get submissions error:', error);
+    res.status(500).json({ error: 'Failed to load submissions' });
+  }
+});
+
+const reviewSubmissionSchema = z.object({
+  status: z.enum(['approved', 'rejected']),
+  reviewNote: z.string().max(2000).optional()
+});
+
+// PATCH /api/admin/submissions/:id -- approve or reject a submission. On
+// approval, broadcasts a Notification to every verified user -- the same
+// bulk-notify shape as broadcast-email below -- and writes an AuditLog
+// entry either way, matching every other admin mutating action in this file.
+router.patch('/submissions/:id', async (req: AuthRequest, res) => {
+  try {
+    const { status, reviewNote } = reviewSubmissionSchema.parse(req.body);
+
+    const submission = await prisma.communitySubmission.findUnique({ where: { id: req.params.id } });
+    if (!submission) return res.status(404).json({ error: 'Submission not found' });
+    if (submission.status !== 'pending') {
+      return res.status(400).json({ error: `This submission was already ${submission.status}` });
+    }
+
+    const updated = await prisma.communitySubmission.update({
+      where: { id: req.params.id },
+      data: {
+        status,
+        reviewNote: reviewNote || null,
+        reviewedById: req.userId!,
+        reviewedAt: new Date()
+      }
+    });
+
+    if (status === 'approved') {
+      const recipients = await prisma.user.findMany({ where: { isVerified: true }, select: { id: true } });
+      await prisma.notification.createMany({
+        data: recipients.map((r: { id: string }) => ({
+          userId: r.id,
+          title: 'New community submission published',
+          message: `"${updated.title}" was just published to the community library.`
+        }))
+      });
+    }
+
+    await prisma.auditLog.create({
+      data: {
+        actorId: req.userId!,
+        action: status === 'approved' ? 'approve_submission' : 'reject_submission',
+        targetType: 'submission',
+        targetId: updated.id,
+        metadata: { title: updated.title, reviewNote: reviewNote || null }
+      }
+    });
+
+    res.json(updated);
+  } catch (error) {
+    if (error instanceof z.ZodError) return res.status(400).json({ error: 'Invalid input', details: error.errors });
+    console.error('Admin review submission error:', error);
+    res.status(500).json({ error: 'Failed to review submission' });
+  }
+});
+
 export default router;

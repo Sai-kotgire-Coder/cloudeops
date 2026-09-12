@@ -4,7 +4,7 @@ import { useProgressStore } from '@/store/progressStore';
 import { useProfileStore } from '@/store/profileStore';
 import { useAuthStore } from '@/store/authStore';
 import { Progress } from '@/components/ui/progress';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 
 const MODULE_LABELS: Record<string, string> = {
@@ -110,7 +110,7 @@ export default function CertificatesPage() {
             <div id="certificate-print-area" className="text-center py-6 px-2">
               <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground mb-4">CloudOps Simulator</p>
               <Award className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-              <h2 className="text-2xl font-bold mb-1">Certificate of Completion</h2>
+              <DialogTitle className="text-2xl font-bold mb-1">Certificate of Completion</DialogTitle>
               <p className="text-sm text-muted-foreground mb-6">This certifies that</p>
               <p className="text-xl font-semibold mb-6">{recipientName}</p>
               <p className="text-sm text-muted-foreground mb-1">has successfully completed the</p>

@@ -7,6 +7,7 @@ import { AdminAnalytics, type AdminAnalyticsData } from '@/components/admin/Admi
 import { UsersTable } from '@/components/admin/UsersTable';
 import { BroadcastEmailPanel } from '@/components/admin/BroadcastEmailPanel';
 import { AuditLogTable } from '@/components/admin/AuditLogTable';
+import { CommunitySubmissionsTable } from '@/components/admin/CommunitySubmissionsTable';
 import { toast } from 'sonner';
 
 export default function AdminPage() {
@@ -54,6 +55,7 @@ export default function AdminPage() {
               <TabsTrigger value="analytics">Analytics</TabsTrigger>
               <TabsTrigger value="users">Users</TabsTrigger>
               <TabsTrigger value="notify">Send Notification</TabsTrigger>
+              <TabsTrigger value="submissions">Submissions</TabsTrigger>
               <TabsTrigger value="audit">Audit Log</TabsTrigger>
             </TabsList>
 
@@ -85,6 +87,10 @@ export default function AdminPage() {
               <div className="max-w-3xl bg-card border border-border rounded-xl p-6">
                 <BroadcastEmailPanel stats={stats} />
               </div>
+            </TabsContent>
+
+            <TabsContent value="submissions" className="mt-6">
+              <CommunitySubmissionsTable />
             </TabsContent>
 
             <TabsContent value="audit" className="mt-6">

@@ -26,6 +26,7 @@ import notificationRoutes from './routes/notifications.js';
 import leaderboardRoutes from './routes/leaderboard.js';
 import certificateRoutes from './routes/certificates.js';
 import referralRoutes from './routes/referral.js';
+import communitySubmissionRoutes from './routes/communitySubmissions.js';
 
 const app = express();
 
@@ -111,6 +112,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/certificates', certificateRoutes);
 app.use('/api/referral', referralRoutes);
+app.use('/api/community-submissions', communitySubmissionRoutes);
 
 // A no-op if SENTRY_DSN isn't set -- must be registered after all routes
 // but before the app's own final error handler below, per Sentry's setup

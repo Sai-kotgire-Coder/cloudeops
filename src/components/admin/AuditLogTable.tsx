@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2, ChevronLeft, ChevronRight, Crown, ShieldOff, Send } from 'lucide-react';
+import { Loader2, ChevronLeft, ChevronRight, Crown, ShieldOff, Send, CheckCircle2, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -20,6 +20,8 @@ const ACTION_META: Record<string, { label: string; icon: any; className: string 
   grant_pro: { label: 'Granted Pro', icon: Crown, className: 'bg-amber-500/10 text-amber-500 border-amber-500/30' },
   revoke_pro: { label: 'Revoked Pro', icon: ShieldOff, className: 'bg-gray-500/10 text-gray-500 border-gray-500/30' },
   broadcast_email: { label: 'Sent Broadcast', icon: Send, className: 'bg-blue-500/10 text-blue-500 border-blue-500/30' },
+  approve_submission: { label: 'Approved Submission', icon: CheckCircle2, className: 'bg-green-500/10 text-green-600 border-green-500/30' },
+  reject_submission: { label: 'Rejected Submission', icon: XCircle, className: 'bg-red-500/10 text-red-600 border-red-500/30' },
 };
 
 function describeEntry(entry: AuditEntry): string {
@@ -29,6 +31,9 @@ function describeEntry(entry: AuditEntry): string {
   }
   if (entry.action === 'grant_pro' || entry.action === 'revoke_pro') {
     return entry.metadata?.targetEmail || entry.targetId || '';
+  }
+  if (entry.action === 'approve_submission' || entry.action === 'reject_submission') {
+    return entry.metadata?.title || entry.targetId || '';
   }
   return '';
 }

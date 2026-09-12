@@ -42,6 +42,9 @@ import LeaderboardPage from "./pages/LeaderboardPage.tsx";
 import CertificatesPage from "./pages/CertificatesPage.tsx";
 import ReferralPage from "./pages/ReferralPage.tsx";
 import DocsPage from "./pages/DocsPage.tsx";
+import CommunityLibraryPage from "./pages/CommunityLibraryPage.tsx";
+import SubmitContentPage from "./pages/SubmitContentPage.tsx";
+import MySubmissionsPage from "./pages/MySubmissionsPage.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 import { LearningSidebar } from "@/components/learning/LearningSidebar";
@@ -156,6 +159,9 @@ const App = () => {
                             <Route path="/certificates" element={<CertificatesPage />} />
                             <Route path="/referrals" element={<ReferralPage />} />
                             <Route path="/docs" element={<DocsPage />} />
+                            <Route path="/docs/community" element={<CommunityLibraryPage />} />
+                            <Route path="/docs/community/submit" element={<SubmitContentPage />} />
+                            <Route path="/docs/community/mine" element={<MySubmissionsPage />} />
                             <Route path="/docs/:docId" element={<DocsPage />} />
                             <Route path="*" element={<NotFound />} />
                           </Routes>
