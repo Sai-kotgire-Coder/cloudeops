@@ -3,7 +3,7 @@ import { create } from 'zustand';
 export interface SchedulerEvent {
   id: string;
   timestamp: number;
-  type: 'pod_scheduled' | 'pod_pending' | 'pod_failed' | 'instance_added' | 'instance_removed' | 'deployment_scaled' | 'traffic_switched' | 'hpa_trigger' | 'asg_trigger' | 'scenario_event' | 'scenario_start' | 'scenario_complete' | 'scenario_failed' | 'objective_complete' | 'hint';
+  type: 'pod_scheduled' | 'pod_pending' | 'pod_failed' | 'instance_added' | 'instance_removed' | 'instance_attached' | 'instance_detached' | 'instance_stopped' | 'instance_started' | 'deployment_created' | 'deployment_scaled' | 'traffic_switched' | 'hpa_trigger' | 'asg_trigger' | 'scenario_event' | 'scenario_start' | 'scenario_complete' | 'scenario_failed' | 'objective_complete' | 'scheduler_blocked' | 'hint';
   message: string;
   detail?: string;
 }
@@ -20,6 +20,11 @@ const ICONS: Record<SchedulerEvent['type'], string> = {
   pod_failed:       '🔴',
   instance_added:   '📈',
   instance_removed: '📉',
+  instance_attached:'🔗',
+  instance_detached:'🔓',
+  instance_stopped: '⏸️',
+  instance_started: '▶️',
+  deployment_created:'🆕',
   deployment_scaled:'⚖️',
   traffic_switched: '🔀',
   hpa_trigger:      '🤖',
@@ -29,6 +34,7 @@ const ICONS: Record<SchedulerEvent['type'], string> = {
   scenario_complete:'✅',
   scenario_failed:  '❌',
   objective_complete:'🎖️',
+  scheduler_blocked:'🚫',
   hint:             '💡',
 };
 

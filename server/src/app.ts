@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import { setupSentryErrorHandler, captureException } from './lib/sentry.js';
 import authRoutes from './routes/auth.js';
 import applicationRoutes from './routes/applications.js';
 import instanceRoutes from './routes/instances.js';
@@ -20,6 +21,8 @@ import vaultRoutes from './routes/vault.js';
 import gitopsRoutes from './routes/gitops.js';
 import profileRoutes from './routes/profile.js';
 import adminRoutes from './routes/admin.js';
+import notificationRoutes from './routes/notifications.js';
+import leaderboardRoutes from './routes/leaderboard.js';
 
 const app = express();
 
@@ -100,9 +103,17 @@ app.use('/api/vault', vaultRoutes);
 app.use('/api/gitops', gitopsRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/leaderboard', leaderboardRoutes);
+
+// A no-op if SENTRY_DSN isn't set -- must be registered after all routes
+// but before the app's own final error handler below, per Sentry's setup
+// requirements for Express.
+setupSentryErrorHandler(app);
 
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('Error:', err);
+  captureException(err);
   res.status(err.status || 500).json({
     error: err.message || 'Internal server error'
   });

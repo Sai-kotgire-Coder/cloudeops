@@ -152,7 +152,7 @@ export async function hydrateUserData() {
         services: netConfig.services ?? [],
         loadBalancers: netConfig.loadBalancers ?? [],
         ingresses: netConfig.ingresses ?? [],
-        traffic: networking.value.traffic ?? 0
+        globalTraffic: networking.value.traffic ?? 0
       });
     }
 

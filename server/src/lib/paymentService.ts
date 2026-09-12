@@ -269,17 +269,8 @@ export async function canAccessFeature(userId: string, featureName: string): Pro
   }
 }
 
-/**
- * Get usage limits based on plan
- */
-export function getUsageLimits(isPro: boolean) {
-  return {
-    maxInstances: isPro ? Infinity : 1,
-    maxApplications: isPro ? Infinity : 1,
-    maxPipelines: isPro ? Infinity : 2,
-    maxContainers: isPro ? Infinity : 3,
-    maxScenarios: isPro ? Infinity : 1,
-    maxTickets: isPro ? Infinity : 5,
-    storageGB: isPro ? 100 : 5
-  };
-}
+// Re-exported for existing callers -- the actual implementation moved to
+// planLimits.ts so it can be unit tested without pulling in the Razorpay
+// SDK (this module constructs a Razorpay client at import time, which
+// throws without real credentials).
+export { getUsageLimits } from './planLimits.js';

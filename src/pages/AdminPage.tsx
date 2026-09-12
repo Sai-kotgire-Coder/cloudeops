@@ -5,6 +5,7 @@ import { apiClient } from '@/lib/apiClient';
 import { AdminStats, type AdminStatsData } from '@/components/admin/AdminStats';
 import { UsersTable } from '@/components/admin/UsersTable';
 import { BroadcastEmailPanel } from '@/components/admin/BroadcastEmailPanel';
+import { AuditLogTable } from '@/components/admin/AuditLogTable';
 import { toast } from 'sonner';
 
 export default function AdminPage() {
@@ -39,6 +40,7 @@ export default function AdminPage() {
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="users">Users</TabsTrigger>
               <TabsTrigger value="notify">Send Notification</TabsTrigger>
+              <TabsTrigger value="audit">Audit Log</TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview" className="mt-6">
@@ -59,6 +61,10 @@ export default function AdminPage() {
               <div className="max-w-3xl bg-card border border-border rounded-xl p-6">
                 <BroadcastEmailPanel stats={stats} />
               </div>
+            </TabsContent>
+
+            <TabsContent value="audit" className="mt-6">
+              <AuditLogTable />
             </TabsContent>
           </Tabs>
         </div>

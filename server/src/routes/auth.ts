@@ -399,6 +399,112 @@ router.post('/google', authLimiter, async (req, res) => {
   }
 });
 
+const githubAuthSchema = z.object({
+  code: z.string(),
+  // The exact redirect_uri the frontend used to start the GitHub authorize
+  // flow -- GitHub's token exchange requires this to match, and since the
+  // app is served from more than one domain (local dev + production), the
+  // backend can't hardcode a single expected value.
+  redirectUri: z.string()
+});
+
+// Sign in (or register) with a GitHub OAuth authorization code obtained
+// client-side via GitHub's standard redirect-based OAuth flow (GitHub has
+// no equivalent of Google's one-tap credential flow). Unlike Google, the
+// client secret here is genuinely secret, so the code-for-token exchange
+// happens server-side only.
+router.post('/github', authLimiter, async (req, res) => {
+  try {
+    const { code, redirectUri } = githubAuthSchema.parse(req.body);
+
+    if (!process.env.GITHUB_CLIENT_ID || !process.env.GITHUB_CLIENT_SECRET) {
+      return res.status(500).json({ error: 'GitHub Sign-In is not configured on this server' });
+    }
+
+    const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        client_id: process.env.GITHUB_CLIENT_ID,
+        client_secret: process.env.GITHUB_CLIENT_SECRET,
+        code,
+        redirect_uri: redirectUri
+      })
+    });
+    const tokenData: any = await tokenResponse.json();
+
+    if (!tokenData.access_token) {
+      console.error('GitHub token exchange failed:', tokenData);
+      return res.status(401).json({ error: 'GitHub sign-in failed' });
+    }
+
+    const accessToken = tokenData.access_token;
+    const githubHeaders = {
+      Authorization: `Bearer ${accessToken}`,
+      'User-Agent': 'CloudOps-Simulator',
+      Accept: 'application/vnd.github+json'
+    };
+
+    const [profileRes, emailsRes] = await Promise.all([
+      fetch('https://api.github.com/user', { headers: githubHeaders }),
+      fetch('https://api.github.com/user/emails', { headers: githubHeaders })
+    ]);
+    const profile: any = await profileRes.json();
+    const emails: any = await emailsRes.json();
+
+    const primaryEmail = Array.isArray(emails)
+      ? emails.find((e: any) => e.primary && e.verified) || emails.find((e: any) => e.verified)
+      : null;
+
+    if (!primaryEmail?.email) {
+      return res.status(400).json({ error: 'Your GitHub account has no verified email address to sign in with' });
+    }
+
+    const email = primaryEmail.email;
+    const githubId = String(profile.id);
+
+    let user = await prisma.user.findUnique({ where: { email } });
+
+    if (user) {
+      // Existing account -- link this GitHub identity if it isn't already,
+      // since GitHub has independently verified the same email address.
+      if (!user.githubId) {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { githubId, isVerified: true }
+        });
+      }
+    } else {
+      user = await prisma.user.create({
+        data: { email, githubId, isVerified: true }
+      });
+      await prisma.userProfile.create({
+        data: { userId: user.id, selectedModules: [], onboardingComplete: false }
+      });
+    }
+
+    const token = signToken(user.id, user.email, user.tokenVersion);
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        isVerified: user.isVerified,
+        isAdmin: user.isAdmin,
+        hasPassword: !!user.passwordHash,
+        createdAt: user.createdAt
+      }
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Invalid input', details: error.errors });
+    }
+    console.error('GitHub auth error:', error);
+    res.status(401).json({ error: 'GitHub sign-in failed' });
+  }
+});
+
 // Forgot password - sends a reset OTP if the email is registered.
 // Always responds with the same generic message regardless of whether the
 // email exists, so this endpoint can't be used to enumerate accounts.

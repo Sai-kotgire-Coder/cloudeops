@@ -249,7 +249,7 @@ class ApiClient {
   }
 
   // Applications
-  async getApplications() {
+  async getApplications(): Promise<any> {
     return this.request('/applications', { method: 'GET' });
   }
 
@@ -272,7 +272,7 @@ class ApiClient {
   }
 
   // Instances
-  async getInstances() {
+  async getInstances(): Promise<any> {
     return this.request('/instances', { method: 'GET' });
   }
 
@@ -295,7 +295,7 @@ class ApiClient {
   }
 
   // Containers
-  async getContainers() {
+  async getContainers(): Promise<any> {
     return this.request('/containers', { method: 'GET' });
   }
 
@@ -341,7 +341,7 @@ class ApiClient {
   }
 
   // Docker Images
-  async getImages() {
+  async getImages(): Promise<any> {
     return this.request('/images', { method: 'GET' });
   }
 
@@ -357,7 +357,7 @@ class ApiClient {
   }
 
   // Progress
-  async getProgress(module?: string) {
+  async getProgress(module?: string): Promise<any> {
     const endpoint = module ? `/progress/${module}` : '/progress';
     return this.request(endpoint, { method: 'GET' });
   }
@@ -370,7 +370,7 @@ class ApiClient {
   }
 
   // Scenarios
-  async getScenarios() {
+  async getScenarios(): Promise<any> {
     return this.request('/scenarios', { method: 'GET' });
   }
 
@@ -393,7 +393,7 @@ class ApiClient {
   }
 
   // Dashboard
-  async getDashboard() {
+  async getDashboard(): Promise<any> {
     return this.request('/dashboard', { method: 'GET' });
   }
 
@@ -405,7 +405,7 @@ class ApiClient {
   }
 
   // Networking
-  async getNetworking() {
+  async getNetworking(): Promise<any> {
     return this.request('/networking', { method: 'GET' });
   }
 
@@ -502,6 +502,49 @@ class ApiClient {
     return this.request('/payment/cancel', { method: 'POST' });
   }
 
+  // GitHub Sign-In
+  async githubLogin(code: string, redirectUri: string): Promise<AuthResponse> {
+    const response = await fetch(`${API_BASE_URL}/auth/github`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, redirectUri }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error || 'GitHub sign-in failed');
+    }
+
+    return response.json();
+  }
+
+  // Notifications
+  async getNotifications(): Promise<any> {
+    return this.request('/notifications', { method: 'GET' });
+  }
+
+  async getUnreadNotificationCount(): Promise<{ count: number }> {
+    return this.request('/notifications/unread-count', { method: 'GET' });
+  }
+
+  async markNotificationRead(id: string): Promise<any> {
+    return this.request(`/notifications/${id}/read`, { method: 'PATCH' });
+  }
+
+  async markAllNotificationsRead(): Promise<any> {
+    return this.request('/notifications/read-all', { method: 'PATCH' });
+  }
+
+  // Leaderboard
+  async getLeaderboard(): Promise<any> {
+    return this.request('/leaderboard', { method: 'GET' });
+  }
+
+  // Admin audit log
+  async getAdminAuditLog(page = 1): Promise<any> {
+    return this.request(`/admin/audit-log?page=${page}`, { method: 'GET' });
+  }
+
   async createPaymentOrder(amount: number, planDurationDays: number): Promise<any> {
     return this.request('/payment/create-order', {
       method: 'POST',
@@ -549,7 +592,7 @@ class ApiClient {
   }
 
   // Alerts
-  async getAlerts(params?: { status?: string; severity?: string }) {
+  async getAlerts(params?: { status?: string; severity?: string }): Promise<any> {
     const queryParams = new URLSearchParams(params as any).toString();
     const endpoint = queryParams ? `/alerts?${queryParams}` : '/alerts';
     return this.request(endpoint, { method: 'GET' });
@@ -574,7 +617,7 @@ class ApiClient {
   }
 
   // Tickets
-  async getTickets() {
+  async getTickets(): Promise<any> {
     return this.request('/tickets', { method: 'GET' });
   }
 
@@ -597,7 +640,7 @@ class ApiClient {
   }
 
   // Game State
-  async getGameState() {
+  async getGameState(): Promise<any> {
     return this.request('/game-state', { method: 'GET' });
   }
 

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useAlertStore, Alert as AlertType } from '@/store/alertStore';
+import { useAlertStore, Alert as AlertType, AlertCategory } from '@/store/alertStore';
 import { useGameStore } from '@/store/gameStore';
-import { useTicketStore } from '@/store/ticketStore';
+import { useTicketStore, TicketCategory } from '@/store/ticketStore';
 import { AlertCard } from '@/components/alerts/AlertCard';
 import { SeverityBadge, AlertStats } from '@/components/alerts/SeverityBadge';
 import { AlertLearningModal } from '@/components/alerts/AlertLearningModal';
@@ -26,6 +26,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+
+// Alerts and tickets categorize by different taxonomies (alerts by the
+// observed signal, tickets by the affected resource) -- the three values
+// with no direct equivalent map to the closest ticket category rather
+// than being passed through as-is.
+function alertCategoryToTicketCategory(category: AlertCategory): TicketCategory {
+  switch (category) {
+    case 'traffic':
+      return 'network';
+    case 'performance':
+      return 'scaling';
+    case 'capacity':
+      return 'scaling';
+    default:
+      return category;
+  }
+}
 
 const IssuesPage = () => {
   const {
@@ -150,7 +167,7 @@ const IssuesPage = () => {
         description: `${alert.message}\n\nAI Insight:\n${alert.insight?.why || 'N/A'}\n\nRecommendation:\n${alert.insight?.recommendation || 'N/A'}`,
         type: severity === 'critical' ? 'incident' : 'alert',
         priority: severity,
-        category: alert.category,
+        category: alertCategoryToTicketCategory(alert.category),
         affectedService: alert.serviceName,
         metricsSnapshot: alert.metrics,
       });
@@ -167,7 +184,7 @@ const IssuesPage = () => {
       description: `${alert.message}\n\nCategory: ${alert.category}\nSeverity: ${alert.severity}\n\nAI Insight:\n${alert.insight?.why || 'No insight available'}`,
       type: alert.severity === 'critical' ? 'incident' : 'alert',
       priority: alert.severity,
-      category: alert.category,
+      category: alertCategoryToTicketCategory(alert.category),
       affectedService: alert.serviceName,
       metricsSnapshot: alert.metrics,
     });

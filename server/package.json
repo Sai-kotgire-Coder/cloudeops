@@ -12,10 +12,13 @@
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
-    "campaign:reactivation": "tsx scripts/send-reactivation-emails.ts"
+    "campaign:reactivation": "tsx scripts/send-reactivation-emails.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",
+    "@sentry/node": "^10.74.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
@@ -36,6 +39,7 @@
     "@types/nodemailer": "^6.4.14",
     "prisma": "^5.20.0",
     "tsx": "^4.19.2",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^5.0.0"
   }
 }

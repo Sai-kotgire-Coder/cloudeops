@@ -36,6 +36,8 @@ import LoginPage from "./pages/LoginPage.tsx";
 import RegisterPage from "./pages/RegisterPage.tsx";
 import VerifyOTPPage from "./pages/VerifyOTPPage.tsx";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage.tsx";
+import GitHubCallbackPage from "./pages/GitHubCallbackPage.tsx";
+import LeaderboardPage from "./pages/LeaderboardPage.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 import { LearningSidebar } from "@/components/learning/LearningSidebar";
@@ -100,6 +102,7 @@ const App = () => {
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/verify-otp" element={<VerifyOTPPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/auth/github/callback" element={<GitHubCallbackPage />} />
 
             {/* Protected routes */}
             <Route
@@ -142,6 +145,7 @@ const App = () => {
                             <Route path="/kubectl" element={<KubectlLabPage />} />
                             <Route path="/gitops" element={<GitOpsLabPage />} />
                             <Route path="/networking" element={<NetworkingPage />} />
+                            <Route path="/leaderboard" element={<LeaderboardPage />} />
                             <Route path="*" element={<NotFound />} />
                           </Routes>
                           <MobileBottomNav />

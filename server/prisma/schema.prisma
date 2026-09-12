@@ -22,6 +22,7 @@ model User {
   // skips the "current password" check when this is null).
   passwordHash String?   @map("password_hash")
   googleId     String?   @unique @map("google_id")
+  githubId     String?   @unique @map("github_id")
   otpCode      String?   @map("otp_code")
   otpExpiry    DateTime? @map("otp_expiry")
   isVerified   Boolean   @default(false) @map("is_verified")
@@ -68,8 +69,45 @@ model User {
   vaultWorkspace     VaultWorkspace?
   gitopsWorkspace    GitOpsWorkspace?
   profile            UserProfile?
+  notifications      Notification[]
+  auditLogs          AuditLog[]
 
   @@map("users")
+}
+
+// In-app notifications (bell icon). Currently created by the admin
+// broadcast-email flow (one row per targeted user, alongside the email
+// itself) so users see it in-app too, not only in their inbox.
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  title     String
+  message   String   @db.Text
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("notifications")
+}
+
+// Records admin-only mutating actions (granting/revoking Pro, sending a
+// broadcast email) for accountability -- who did what, when, to whom.
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String   @map("actor_id") // the admin who performed the action
+  action     String // e.g. 'grant_pro', 'revoke_pro', 'broadcast_email'
+  targetType String?  @map("target_type") // e.g. 'user'
+  targetId   String?  @map("target_id")
+  metadata   Json?    @db.JsonB // free-form details (e.g. broadcast subject/target filter)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  actor User @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([actorId])
+  @@index([createdAt])
+  @@map("audit_logs")
 }
 
 // Applications created by users

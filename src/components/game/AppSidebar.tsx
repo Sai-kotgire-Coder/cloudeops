@@ -1,10 +1,11 @@
-import { Zap, LogOut, User, Rocket, ShieldAlert } from 'lucide-react';
+import { Zap, LogOut, User, Rocket, ShieldAlert, Trophy } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { useAlertStore } from '@/store/alertStore';
 import { useProfileStore } from '@/store/profileStore';
 import { MODULE_CATALOG } from '@/data/moduleCatalog';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
 import {
   Sidebar,
   SidebarContent,
@@ -30,6 +31,10 @@ import {
 
 const upgradeSectionItems = [
   { title: 'Pricing & Plans', url: '/pricing', icon: Rocket, badge: 'Pro' },
+];
+
+const communityItems = [
+  { title: 'Leaderboard', url: '/leaderboard', icon: Trophy },
 ];
 
 export function AppSidebar() {
@@ -138,6 +143,30 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupLabel>Community</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {communityItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild isActive={location.pathname === item.url}>
+                    <NavLink
+                      to={item.url}
+                      end
+                      className="hover:bg-sidebar-accent/50"
+                      activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
+                    >
+                      <div className="flex items-center flex-1 gap-2">
+                        <item.icon className="h-4 w-4" />
+                        {!collapsed && <span>{item.title}</span>}
+                      </div>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
         {user?.isAdmin && (
           <SidebarGroup>
             <SidebarGroupLabel>Admin</SidebarGroupLabel>
@@ -165,28 +194,32 @@ export function AppSidebar() {
       </SidebarContent>
       <SidebarFooter className="p-3 border-t border-sidebar-border">
         {!collapsed ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="w-full justify-start px-2">
-                <User className="mr-2 h-4 w-4" />
-                <span className="text-sm truncate">{user?.email}</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuLabel>Account</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => navigate('/account')}>
-                <User className="mr-2 h-4 w-4" />
-                My Account
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleLogout}>
-                <LogOut className="mr-2 h-4 w-4" />
-                Logout
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <div className="flex items-center gap-1">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="flex-1 justify-start px-2 min-w-0">
+                  <User className="mr-2 h-4 w-4 shrink-0" />
+                  <span className="text-sm truncate">{user?.email}</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuLabel>Account</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate('/account')}>
+                  <User className="mr-2 h-4 w-4" />
+                  My Account
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleLogout}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <NotificationBell />
+          </div>
         ) : (
           <div className="flex flex-col items-center gap-1">
+            <NotificationBell />
             <Button
               variant="ghost"
               size="icon"

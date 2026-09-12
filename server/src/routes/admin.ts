@@ -5,16 +5,10 @@ import { adminMiddleware } from '../middleware/adminAuth.js';
 import prisma from '../lib/prisma.js';
 import { sendEmail } from '../lib/emailService.js';
 import { wrapEmailHtml, applyInlineMarkdownBold } from '../emails/emailShell.js';
+import { isActive, ACTIVE_WINDOW_DAYS } from '../lib/activity.js';
 
 const router = Router();
 router.use(authMiddleware, adminMiddleware);
-
-const ACTIVE_WINDOW_DAYS = 14;
-
-function isActive(lastActiveAt: Date | null): boolean {
-  if (!lastActiveAt) return false;
-  return lastActiveAt.getTime() > Date.now() - ACTIVE_WINDOW_DAYS * 24 * 60 * 60 * 1000;
-}
 
 // GET /api/admin/stats -- dashboard summary
 router.get('/stats', async (_req, res) => {
@@ -175,7 +169,7 @@ const updatePlanSchema = z.object({
 });
 
 // PATCH /api/admin/users/:id/plan -- manually grant/revoke Pro (support tool)
-router.patch('/users/:id/plan', async (req, res) => {
+router.patch('/users/:id/plan', async (req: AuthRequest, res) => {
   try {
     const { isPro } = updatePlanSchema.parse(req.body);
 
@@ -187,6 +181,16 @@ router.patch('/users/:id/plan', async (req, res) => {
       data: isPro
         ? { isPro: true, planType: 'pro', planExpiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) }
         : { isPro: false, planType: 'free', planExpiry: null },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        actorId: req.userId!,
+        action: isPro ? 'grant_pro' : 'revoke_pro',
+        targetType: 'user',
+        targetId: updated.id,
+        metadata: { targetEmail: updated.email }
+      }
     });
 
     res.json({ message: `${updated.email} is now on the ${updated.planType} plan`, isPro: updated.isPro, planType: updated.planType });
@@ -228,7 +232,7 @@ router.post('/broadcast-email', async (req: AuthRequest, res) => {
 
     const users = await prisma.user.findMany({
       where: { isVerified: true },
-      select: { email: true, isPro: true, gameState: { select: { updatedAt: true } } },
+      select: { id: true, email: true, isPro: true, gameState: { select: { updatedAt: true } } },
     });
 
     let recipients = users;
@@ -257,6 +261,20 @@ router.post('/broadcast-email', async (req: AuthRequest, res) => {
 
     console.log(`Broadcast complete: sent=${sent} failed=${failed} target=${target}`);
 
+    // In-app notification alongside the email, so it shows up in the bell
+    // even if the email is slow, filtered to spam, or the address bounces.
+    await prisma.notification.createMany({
+      data: recipients.map((r) => ({ userId: r.id, title: subject, message }))
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        actorId: req.userId!,
+        action: 'broadcast_email',
+        metadata: { subject, target, recipientCount: recipients.length, sent, failed }
+      }
+    });
+
     res.json({
       message: failed === 0
         ? `Sent to all ${sent} recipient(s)`
@@ -269,6 +287,44 @@ router.post('/broadcast-email', async (req: AuthRequest, res) => {
     if (error instanceof z.ZodError) return res.status(400).json({ error: 'Invalid input', details: error.errors });
     console.error('Admin broadcast error:', error);
     res.status(500).json({ error: 'Failed to send broadcast' });
+  }
+});
+
+// GET /api/admin/audit-log -- who did what, when. Covers admin-only
+// mutating actions (grant/revoke Pro, broadcast sends); page in from the
+// most recent.
+router.get('/audit-log', async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string, 10) || 25));
+
+    const [entries, total] = await Promise.all([
+      prisma.auditLog.findMany({
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+        include: { actor: { select: { email: true } } }
+      }),
+      prisma.auditLog.count()
+    ]);
+
+    res.json({
+      entries: entries.map((e) => ({
+        id: e.id,
+        actorEmail: e.actor.email,
+        action: e.action,
+        targetType: e.targetType,
+        targetId: e.targetId,
+        metadata: e.metadata,
+        createdAt: e.createdAt
+      })),
+      total,
+      page,
+      totalPages: Math.max(1, Math.ceil(total / limit))
+    });
+  } catch (error) {
+    console.error('Admin audit log error:', error);
+    res.status(500).json({ error: 'Failed to load audit log' });
   }
 });
 

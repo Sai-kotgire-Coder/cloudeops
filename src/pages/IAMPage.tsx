@@ -9,11 +9,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 
 const IAMPage = () => {
-  const { managedPolicies, customPolicies, attachedPolicyIds, attachPolicy, detachPolicy } = useIAMStore();
+  const { managedPolicies, customPolicies, currentUserRoleId, attachPolicyToRole, detachPolicyFromRole } = useIAMStore();
   const userPolicies = useUserPolicies();
+  // Policies attached to whichever role represents "the current user" --
+  // there's no separate per-user attachment list, only per-role.
+  const attachedPolicyIds = userPolicies.map((p) => p.id);
 
   const handleAttach = (id: string, name: string) => {
-    attachPolicy(id);
+    attachPolicyToRole(currentUserRoleId, id);
     toast.success(`Policy Attached: ${name}`);
   };
 
@@ -22,7 +25,7 @@ const IAMPage = () => {
       toast.error("Cannot detach the last policy. You must have at least one policy attached to maintain access.");
       return;
     }
-    detachPolicy(id);
+    detachPolicyFromRole(currentUserRoleId, id);
     toast.info(`Policy Detached: ${name}`);
   };
 

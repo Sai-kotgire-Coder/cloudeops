@@ -29,7 +29,7 @@ const verifyPaymentSchema = z.object({
  */
 router.post('/create-order', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const userId = req.userId;
+    const userId = req.userId!;
     const { amount, planDurationDays } = createOrderSchema.parse(req.body);
 
     // Get plan configuration from env
@@ -64,7 +64,7 @@ router.post('/create-order', authMiddleware, async (req: AuthRequest, res) => {
  */
 router.post('/verify', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const userId = req.userId;
+    const userId = req.userId!;
     const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = verifyPaymentSchema.parse(req.body);
 
     // Verify payment
@@ -95,7 +95,7 @@ router.post('/verify', authMiddleware, async (req: AuthRequest, res) => {
  */
 router.get('/plan', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const userId = req.userId;
+    const userId = req.userId!;
 
     const planDetails = await getUserPlanDetails(userId);
 
@@ -153,7 +153,7 @@ router.post('/cancel', authMiddleware, async (req: AuthRequest, res) => {
  */
 router.get('/usage', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const userId = req.userId;
+    const userId = req.userId!;
 
     // Get user plan
     const planDetails = await getUserPlanDetails(userId);
@@ -192,7 +192,7 @@ router.get('/usage', authMiddleware, async (req: AuthRequest, res) => {
  * GET /api/payment/pricing
  * Get pricing information (no auth required)
  */
-router.get('/pricing', async (req: Request, res: Response) => {
+router.get('/pricing', async (_req, res) => {
   try {
     return res.status(200).json({
       free: {

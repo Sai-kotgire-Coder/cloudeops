@@ -10,6 +10,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Shield } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
+import { GitHubSignInButton } from '@/components/auth/GitHubSignInButton';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -77,8 +78,9 @@ export default function LoginPage() {
             Sign in to your CloudOps Simulator account
           </CardDescription>
         </CardHeader>
-        <CardContent className="pb-0">
+        <CardContent className="pb-0 space-y-2">
           <GoogleSignInButton />
+          <GitHubSignInButton />
           <div className="flex items-center gap-3 my-4">
             <div className="h-px bg-border flex-1" />
             <span className="text-xs text-muted-foreground">OR CONTINUE WITH EMAIL</span>
