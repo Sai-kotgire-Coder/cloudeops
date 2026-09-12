@@ -67,10 +67,15 @@ export const GoogleSignInButton = () => {
           client_id: clientId,
           callback: handleCredentialResponse,
         });
+        // Google's button only accepts a literal pixel width (no "100%"),
+        // so match the container's actual rendered width to keep it aligned
+        // with the full-width GitHub button below it.
+        const measuredWidth = containerRef.current.getBoundingClientRect().width;
+        const width = Math.round(Math.min(400, Math.max(200, measuredWidth || 320)));
         window.google.accounts.id.renderButton(containerRef.current, {
           theme: 'outline',
           size: 'large',
-          width: 320,
+          width,
           text: 'continue_with',
         });
       })
