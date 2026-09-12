@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { useToast } from '../../hooks/use-toast';
+import { apiClient } from '@/lib/apiClient';
 
 interface PaymentHandlerProps {
   onPaymentSuccess?: (paymentDetails: any) => void;
@@ -28,24 +29,7 @@ export const usePaymentHandler = ({
       setIsLoading(true);
 
       // Step 1: Create order on backend
-      const response = await fetch('/api/payment/create-order', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
-        },
-        body: JSON.stringify({
-          amount,
-          planDurationDays,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to create payment order');
-      }
-
-      const { order } = await response.json();
+      const { order } = await apiClient.createPaymentOrder(amount, planDurationDays);
 
       // Step 2: Open Razorpay payment modal
       const options = {
@@ -59,24 +43,11 @@ export const usePaymentHandler = ({
         handler: async (response: any) => {
           try {
             // Step 3: Verify payment on backend
-            const verifyResponse = await fetch('/api/payment/verify', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
-              },
-              body: JSON.stringify({
-                razorpayOrderId: order.id,
-                razorpayPaymentId: response.razorpay_payment_id,
-                razorpaySignature: response.razorpay_signature,
-              }),
-            });
-
-            if (!verifyResponse.ok) {
-              throw new Error('Payment verification failed');
-            }
-
-            const verifyData = await verifyResponse.json();
+            const verifyData = await apiClient.verifyPayment(
+              order.id,
+              response.razorpay_payment_id,
+              response.razorpay_signature
+            );
 
             toast({
               title: 'Success! 🎉',

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from '../../hooks/use-toast';
+import { apiClient } from '@/lib/apiClient';
 
 interface UserPlan {
   id: string;
@@ -40,22 +41,12 @@ export const usePlanCheck = () => {
   const fetchPlanDetails = useCallback(async () => {
     try {
       setIsLoading(true);
-      const token = localStorage.getItem('authToken');
-
-      if (!token) {
+      if (!localStorage.getItem('auth_token')) {
         setError('Not authenticated');
         return;
       }
 
-      const response = await fetch('/api/payment/plan', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch plan');
-
-      const data = await response.json();
+      const data = await apiClient.getUserPlan();
       setPlan(data);
       setError(null);
     } catch (err: any) {
@@ -68,22 +59,12 @@ export const usePlanCheck = () => {
 
   const fetchUsage = useCallback(async () => {
     try {
-      const token = localStorage.getItem('authToken');
-
-      if (!token) {
+      if (!localStorage.getItem('auth_token')) {
         setError('Not authenticated');
         return;
       }
 
-      const response = await fetch('/api/payment/usage', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch usage');
-
-      const data = await response.json();
+      const data = await apiClient.getUsage();
       setUsage(data);
     } catch (err: any) {
       console.error('Error fetching usage:', err);

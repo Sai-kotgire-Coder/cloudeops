@@ -4,6 +4,7 @@ import { Button } from '../ui/button';
 import { Rocket, Check } from 'lucide-react';
 import { usePaymentHandler } from './usePaymentHandler';
 import { useToast } from '../../hooks/use-toast';
+import { apiClient } from '@/lib/apiClient';
 
 interface PricingPlan {
   name: string;
@@ -37,9 +38,7 @@ export const PricingPage: React.FC = () => {
 
   const fetchPricingData = async () => {
     try {
-      const response = await fetch('/api/payment/pricing');
-      if (!response.ok) throw new Error('Failed to fetch pricing');
-      const data = await response.json();
+      const data = await apiClient.getPricing();
       setPricing(data);
     } catch (error: any) {
       console.error('Error fetching pricing:', error);
@@ -53,15 +52,8 @@ export const PricingPage: React.FC = () => {
 
   const fetchUserPlan = async () => {
     try {
-      const response = await fetch('/api/payment/plan', {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
-        },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setUserPlan(data);
-      }
+      const data = await apiClient.getUserPlan();
+      setUserPlan(data);
     } catch (error) {
       console.error('Error fetching user plan:', error);
     }

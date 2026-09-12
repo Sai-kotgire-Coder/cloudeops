@@ -1,6 +1,19 @@
-import { UserCircle2, Crown, ShieldCheck } from 'lucide-react';
+import { useState } from 'react';
+import { UserCircle2, Crown, ShieldCheck, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import { apiClient } from '@/lib/apiClient';
 import { useAuthStore } from '@/store/authStore';
 import { useProfileStore } from '@/store/profileStore';
 import { PersonalInfoForm } from '@/components/account/PersonalInfoForm';
@@ -19,6 +32,23 @@ export default function MyAccountPage() {
 
   const fields: ProfileFields = { fullName, phone, linkedinUrl, instagramHandle, dateOfBirth, institute, occupation };
   const isPro = plan?.isPro ?? false;
+
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+
+  const handleCancelSubscription = async () => {
+    setCancelling(true);
+    try {
+      await apiClient.cancelSubscription();
+      useProfileStore.setState({ plan: { isPro: false, planType: 'free', planExpiry: null } });
+      toast.success('Your Pro plan has been cancelled — you are now on the Free plan.');
+      setCancelOpen(false);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to cancel subscription');
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
@@ -57,8 +87,40 @@ export default function MyAccountPage() {
               {!isPro && (
                 <Button size="sm" onClick={() => navigate('/pricing')}>Upgrade</Button>
               )}
+              {isPro && (
+                <Button size="sm" variant="outline" onClick={() => setCancelOpen(true)}>
+                  Cancel Subscription
+                </Button>
+              )}
             </div>
           </div>
+
+          <AlertDialog open={cancelOpen} onOpenChange={setCancelOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Cancel your Pro plan?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  You'll immediately lose access to Pro features (unlimited instances, applications, pipelines,
+                  containers, and advanced monitoring) and drop to the Free plan's limits. There's no charge for
+                  cancelling, and you can upgrade again any time from the Pricing page.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={cancelling}>Keep Pro</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleCancelSubscription();
+                  }}
+                  disabled={cancelling}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  {cancelling ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                  {cancelling ? 'Cancelling...' : 'Yes, cancel'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
 
           {/* Personal Information */}
           <div className="bg-card border border-border rounded-xl p-6 space-y-4">

@@ -465,6 +465,40 @@ class ApiClient {
     return this.request('/payment/plan', { method: 'GET' });
   }
 
+  // Payment / plan
+  async getPricing() {
+    // Public endpoint, no auth header needed
+    const response = await fetch(`${API_BASE_URL}/payment/pricing`);
+    if (!response.ok) throw new Error('Failed to fetch pricing');
+    return response.json();
+  }
+
+  async getUserPlan(): Promise<any> {
+    return this.request('/payment/plan', { method: 'GET' });
+  }
+
+  async getUsage(): Promise<any> {
+    return this.request('/payment/usage', { method: 'GET' });
+  }
+
+  async cancelSubscription(): Promise<any> {
+    return this.request('/payment/cancel', { method: 'POST' });
+  }
+
+  async createPaymentOrder(amount: number, planDurationDays: number): Promise<any> {
+    return this.request('/payment/create-order', {
+      method: 'POST',
+      body: JSON.stringify({ amount, planDurationDays }),
+    });
+  }
+
+  async verifyPayment(razorpayOrderId: string, razorpayPaymentId: string, razorpaySignature: string): Promise<any> {
+    return this.request('/payment/verify', {
+      method: 'POST',
+      body: JSON.stringify({ razorpayOrderId, razorpayPaymentId, razorpaySignature }),
+    });
+  }
+
   // Alerts
   async getAlerts(params?: { status?: string; severity?: string }) {
     const queryParams = new URLSearchParams(params as any).toString();

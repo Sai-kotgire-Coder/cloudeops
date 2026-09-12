@@ -116,6 +116,38 @@ router.get('/plan', authMiddleware, async (req: AuthRequest, res) => {
 });
 
 /**
+ * POST /api/payment/cancel
+ * Cancel the user's Pro plan. There's no recurring auto-renewal to stop
+ * here (Pro is a one-time 30-day top-up, not a Razorpay subscription
+ * object), so "cancel" means immediately reverting to the Free plan --
+ * there's no partial-refund or "stays active until period end" logic.
+ */
+router.post('/cancel', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.userId!;
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (!user.isPro) {
+      return res.status(400).json({ error: 'You don\'t have an active Pro plan to cancel' });
+    }
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { isPro: false, planType: 'free', planExpiry: null }
+    });
+
+    return res.status(200).json({ message: 'Your Pro plan has been cancelled. You are now on the Free plan.' });
+  } catch (error: any) {
+    console.error('Error cancelling plan:', error);
+    return res.status(500).json({ error: 'Failed to cancel plan' });
+  }
+});
+
+/**
  * GET /api/payment/usage
  * Get current user's resource usage
  */
