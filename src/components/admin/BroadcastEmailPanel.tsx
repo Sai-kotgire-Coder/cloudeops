@@ -151,7 +151,7 @@ export const BroadcastEmailPanel = ({ stats }: { stats: AdminStatsData | null })
           rows={10}
         />
         <p className="text-xs text-muted-foreground">
-          Sent as plain text wrapped in the CloudOps email template -- no need to write HTML.
+          Sent in the branded CloudOps email design -- no need to write HTML. Wrap text in **double asterisks** to make it bold.
         </p>
       </div>
 

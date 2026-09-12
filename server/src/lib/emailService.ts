@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { wrapEmailHtml } from '../emails/emailShell.js';
 
 // Create email transporter
 const transporter = nodemailer.createTransport({
@@ -20,19 +21,18 @@ export async function sendOTPEmail(email: string, otp: string): Promise<void> {
     from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
     to: email,
     subject: 'CloudOps Simulator - Email Verification',
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #2563eb;">CloudOps Simulator</h2>
-        <p>Your verification code is:</p>
-        <div style="background-color: #f3f4f6; padding: 20px; text-align: center; border-radius: 8px; margin: 20px 0;">
-          <h1 style="color: #1f2937; letter-spacing: 8px; margin: 0;">${otp}</h1>
-        </div>
-        <p>This code will expire in <strong>5 minutes</strong>.</p>
-        <p style="color: #6b7280; font-size: 14px;">If you didn't request this code, please ignore this email.</p>
-        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
-        <p style="color: #9ca3af; font-size: 12px;">CloudOps Simulator - Cloud Operations Learning Platform</p>
-      </div>
-    `,
+    html: wrapEmailHtml(`
+      <p style="margin:0 0 16px;">Welcome! Use the code below to verify your email and finish creating your account.</p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;">
+        <tr>
+          <td align="center" style="background-color:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; padding:22px;">
+            <span style="font-size:34px; font-weight:700; letter-spacing:10px; color:#1d4ed8; font-family:Arial,Helvetica,sans-serif;">${otp}</span>
+          </td>
+        </tr>
+      </table>
+      <p style="margin:0 0 8px;">This code will expire in <strong>5 minutes</strong>.</p>
+      <p style="margin:0; color:#6b7280; font-size:13px;">If you didn't request this code, you can safely ignore this email.</p>
+    `),
     text: `Your CloudOps Simulator verification code is: ${otp}. This code will expire in 5 minutes.`,
   };
 
@@ -51,19 +51,18 @@ export async function sendPasswordResetEmail(email: string, otp: string): Promis
     from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
     to: email,
     subject: 'CloudOps Simulator - Reset Your Password',
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #2563eb;">CloudOps Simulator</h2>
-        <p>We received a request to reset your password. Use the code below to continue:</p>
-        <div style="background-color: #f3f4f6; padding: 20px; text-align: center; border-radius: 8px; margin: 20px 0;">
-          <h1 style="color: #1f2937; letter-spacing: 8px; margin: 0;">${otp}</h1>
-        </div>
-        <p>This code will expire in <strong>10 minutes</strong>.</p>
-        <p style="color: #6b7280; font-size: 14px;">If you didn't request a password reset, you can safely ignore this email -- your password won't be changed.</p>
-        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
-        <p style="color: #9ca3af; font-size: 12px;">CloudOps Simulator - Cloud Operations Learning Platform</p>
-      </div>
-    `,
+    html: wrapEmailHtml(`
+      <p style="margin:0 0 16px;">We received a request to reset your password. Use the code below to continue:</p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;">
+        <tr>
+          <td align="center" style="background-color:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; padding:22px;">
+            <span style="font-size:34px; font-weight:700; letter-spacing:10px; color:#1d4ed8; font-family:Arial,Helvetica,sans-serif;">${otp}</span>
+          </td>
+        </tr>
+      </table>
+      <p style="margin:0 0 8px;">This code will expire in <strong>10 minutes</strong>.</p>
+      <p style="margin:0; color:#6b7280; font-size:13px;">If you didn't request a password reset, you can safely ignore this email -- your password won't be changed.</p>
+    `),
     text: `Your CloudOps Simulator password reset code is: ${otp}. This code will expire in 10 minutes. If you didn't request this, you can ignore this email.`,
   };
 

@@ -4,6 +4,7 @@ import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 import { adminMiddleware } from '../middleware/adminAuth.js';
 import prisma from '../lib/prisma.js';
 import { sendEmail } from '../lib/emailService.js';
+import { wrapEmailHtml, applyInlineMarkdownBold } from '../emails/emailShell.js';
 
 const router = Router();
 router.use(authMiddleware, adminMiddleware);
@@ -205,17 +206,10 @@ const broadcastSchema = z.object({
 function wrapBroadcastHtml(message: string): string {
   const paragraphs = message
     .split('\n\n')
-    .map((p) => `<p style="margin: 0 0 16px; color: #374151; font-size: 15px; line-height: 1.6; white-space: pre-line;">${p}</p>`)
+    .map((p) => `<p style="margin: 0 0 16px; color: #374151; font-size: 15px; line-height: 1.6; white-space: pre-line;">${applyInlineMarkdownBold(p)}</p>`)
     .join('\n');
 
-  return `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: #2563eb; margin-bottom: 24px;">CloudOps Simulator</h2>
-      ${paragraphs}
-      <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;">
-      <p style="color: #9ca3af; font-size: 12px;">CloudOps Simulator -- Cloud Operations Learning Platform</p>
-    </div>
-  `;
+  return wrapEmailHtml(paragraphs);
 }
 
 // POST /api/admin/broadcast-email -- compose + send to a filtered user set.
