@@ -38,6 +38,7 @@ import VerifyOTPPage from "./pages/VerifyOTPPage.tsx";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage.tsx";
 import GitHubCallbackPage from "./pages/GitHubCallbackPage.tsx";
 import LeaderboardPage from "./pages/LeaderboardPage.tsx";
+import CertificatesPage from "./pages/CertificatesPage.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 import { LearningSidebar } from "@/components/learning/LearningSidebar";
@@ -48,6 +49,7 @@ import { ScenarioObjectiveWatcher } from "@/components/scenario/ScenarioObjectiv
 import { ScenarioBanner } from "@/components/game/ScenarioBanner";
 import { HintDisplay } from "@/components/scenario/HintDisplay";
 import { GitOpsReconciler } from "@/components/gitops/GitOpsReconciler";
+import { ProgressWatcher } from "@/components/progress/ProgressWatcher";
 import { OnboardingGate } from "@/components/account/OnboardingGate";
 import { AdminRoute } from "@/components/auth/AdminRoute";
 import { SessionGuard } from "@/components/auth/SessionGuard";
@@ -116,6 +118,7 @@ const App = () => {
                     <OnboardingOverlay />
                     <ScenarioObjectiveWatcher />
                     <GitOpsReconciler />
+                    <ProgressWatcher />
                     <ScenarioBanner />
                     <HintDisplay />
                     <SidebarProvider defaultOpen={false}>
@@ -146,6 +149,7 @@ const App = () => {
                             <Route path="/gitops" element={<GitOpsLabPage />} />
                             <Route path="/networking" element={<NetworkingPage />} />
                             <Route path="/leaderboard" element={<LeaderboardPage />} />
+                            <Route path="/certificates" element={<CertificatesPage />} />
                             <Route path="*" element={<NotFound />} />
                           </Routes>
                           <MobileBottomNav />

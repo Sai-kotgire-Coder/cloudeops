@@ -10,6 +10,7 @@ import { useAnsibleStore } from '@/store/ansibleStore';
 import { useVaultStore } from '@/store/vaultStore';
 import { useGitOpsStore } from '@/store/gitopsStore';
 import { useProfileStore } from '@/store/profileStore';
+import { useProgressStore } from '@/store/progressStore';
 
 /**
  * Hydrate all user data from the backend on login
@@ -132,7 +133,8 @@ export async function hydrateUserData() {
         latencyAvg: gs.latencyAvg ?? 0,
         metricsHistory: gs.metricsHistory ?? [],
         tutorialStep: gs.tutorialStep ?? 0,
-        tutorialComplete: gs.tutorialComplete ?? false
+        tutorialComplete: gs.tutorialComplete ?? false,
+        kubectlCommandCount: gs.kubectlCommandCount ?? 0
       });
     }
 
@@ -200,6 +202,11 @@ export async function hydrateUserData() {
     if (plan.status === 'fulfilled' && plan.value) {
       useProfileStore.getState().hydratePlan(plan.value as any);
     }
+
+    // Fire-and-forget -- not part of the critical hydration path above
+    // (ProgressWatcher polls this same summary every 30s once mounted).
+    useProgressStore.getState().fetchSummary();
+    useProgressStore.getState().fetchCertificates();
 
     return {
       applications: applications.status === 'fulfilled' ? applications.value : [],

@@ -71,8 +71,26 @@ model User {
   profile            UserProfile?
   notifications      Notification[]
   auditLogs          AuditLog[]
+  certificates       Certificate[]
 
   @@map("users")
+}
+
+// Earned on first crossing a module's completion threshold (computed by
+// GET /api/progress/summary from existing per-module counters). One per
+// [userId, module] -- re-crossing the threshold later doesn't re-issue it.
+model Certificate {
+  id       String   @id @default(uuid())
+  userId   String   @map("user_id")
+  module   String
+  code     String   @unique // short shareable code shown on the certificate
+  issuedAt DateTime @default(now()) @map("issued_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, module])
+  @@index([userId])
+  @@map("certificates")
 }
 
 // In-app notifications (bell icon). Currently created by the admin
@@ -507,7 +525,13 @@ model GameState {
   // Tutorial/Learning
   tutorialStep     Int     @default(0) @map("tutorial_step")
   tutorialComplete Boolean @default(false) @map("tutorial_complete")
-  
+
+  // kubectl Lab has no dedicated workspace model (it reads/writes this
+  // gameState directly, see src/lib/kubectlEngine.ts) -- this counter is
+  // its only progress signal, incremented client-side on each mutating
+  // kubectl command, used by GET /api/progress/summary.
+  kubectlCommandCount Int @default(0) @map("kubectl_command_count")
+
   updatedAt    DateTime @updatedAt @map("updated_at")
   
   // Relations

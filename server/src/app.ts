@@ -23,6 +23,7 @@ import profileRoutes from './routes/profile.js';
 import adminRoutes from './routes/admin.js';
 import notificationRoutes from './routes/notifications.js';
 import leaderboardRoutes from './routes/leaderboard.js';
+import certificateRoutes from './routes/certificates.js';
 
 const app = express();
 
@@ -105,6 +106,7 @@ app.use('/api/profile', profileRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
+app.use('/api/certificates', certificateRoutes);
 
 // A no-op if SENTRY_DSN isn't set -- must be registered after all routes
 // but before the app's own final error handler below, per Sentry's setup

@@ -572,6 +572,11 @@ export function getKubectlAutocompleteSuggestions(input: string): string[] {
 // EXECUTOR
 // ============================================================================
 
+// Operations that count as "real" progress toward the kubectl Lab's
+// completion threshold (see GET /api/progress/summary) -- read-only verbs
+// like get/describe/logs/top/cluster-info don't count.
+const MUTATING_OPERATIONS = new Set(['delete', 'scale', 'rollout', 'apply', 'create', 'expose']);
+
 export function executeKubectlCommand(input: string): CommandResult {
   const trimmed = input.trim();
   if (!trimmed) return { type: 'info', output: '', timestamp: Date.now() };
@@ -600,7 +605,11 @@ export function executeKubectlCommand(input: string): CommandResult {
   }
 
   try {
-    return command.handler(parsed);
+    const result = command.handler(parsed);
+    if (result.type === 'success' && MUTATING_OPERATIONS.has(command.operation)) {
+      useGameStore.getState().incrementKubectlCommandCount();
+    }
+    return result;
   } catch (error) {
     return {
       type: 'error',

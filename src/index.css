@@ -254,3 +254,20 @@
     }
   }
 }
+
+/* Printing a certificate (CertificatesPage) should show only the
+   certificate itself, not the rest of the app shell behind the dialog. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #certificate-print-area,
+  #certificate-print-area * {
+    visibility: visible;
+  }
+  #certificate-print-area {
+    position: fixed;
+    inset: 0;
+    margin: auto;
+  }
+}

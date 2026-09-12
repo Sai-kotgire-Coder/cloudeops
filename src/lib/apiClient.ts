@@ -540,6 +540,19 @@ class ApiClient {
     return this.request('/leaderboard', { method: 'GET' });
   }
 
+  // Module progress + certificates
+  async getProgressSummary(): Promise<any> {
+    return this.request('/progress/summary', { method: 'GET' });
+  }
+
+  async getCertificates(): Promise<any> {
+    return this.request('/certificates', { method: 'GET' });
+  }
+
+  async getCertificate(code: string): Promise<any> {
+    return this.request(`/certificates/${code}`, { method: 'GET' });
+  }
+
   // Admin audit log
   async getAdminAuditLog(page = 1): Promise<any> {
     return this.request(`/admin/audit-log?page=${page}`, { method: 'GET' });

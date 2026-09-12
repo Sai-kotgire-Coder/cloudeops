@@ -39,7 +39,8 @@ const saveGameStateToBackend = (state: any) => {
         latencyAvg: state.latencyAvg,
         metricsHistory: state.metricsHistory,
         tutorialStep: state.tutorialStep,
-        tutorialComplete: state.tutorialComplete
+        tutorialComplete: state.tutorialComplete,
+        kubectlCommandCount: state.kubectlCommandCount
       });
     } catch (error) {
       console.error('Failed to save game state:', error);
@@ -185,6 +186,9 @@ interface GameState {
   alerts: Alert[];
   tutorialStep: number;
   tutorialComplete: boolean;
+  // Only progress signal for kubectl Lab, which has no dedicated workspace
+  // model of its own -- see src/lib/kubectlEngine.ts.
+  kubectlCommandCount: number;
 
   advanceTutorial: () => void;
   completeTutorial: () => void;
@@ -220,6 +224,7 @@ interface GameState {
   attachInstance: (appId: string, instanceId: string) => void;
   detachInstance: (appId: string, instanceId: string) => void;
   resetSimulation: () => void;
+  incrementKubectlCommandCount: () => void;
 }
 
 let instanceCounter = 0;
@@ -319,6 +324,7 @@ export const useGameStore = create<GameState>()(
     alerts: [],
     tutorialStep: 0,
     tutorialComplete: false,
+    kubectlCommandCount: 0,
 
     advanceTutorial: () => set(s => ({ tutorialStep: s.tutorialStep + 1 })),
     completeTutorial: () => set({ tutorialComplete: true }),
@@ -1406,6 +1412,14 @@ export const useGameStore = create<GameState>()(
       // Reload page to reinitialize
       window.location.reload();
     },
+
+    incrementKubectlCommandCount: () => {
+      set(s => {
+        const newCount = s.kubectlCommandCount + 1;
+        saveGameStateToBackend({ ...s, kubectlCommandCount: newCount });
+        return { kubectlCommandCount: newCount };
+      });
+    },
   };
 },
 {
@@ -1427,6 +1441,7 @@ export const useGameStore = create<GameState>()(
     score: state.score,
     tutorialStep: state.tutorialStep,
     tutorialComplete: state.tutorialComplete,
+    kubectlCommandCount: state.kubectlCommandCount,
     // Don't persist runtime state
     // isRunning, tick, cpuAvg, errorRate, latencyAvg, metricsHistory, alerts, scoreHistory
   }),
