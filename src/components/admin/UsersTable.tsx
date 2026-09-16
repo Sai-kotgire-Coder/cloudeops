@@ -3,6 +3,7 @@ import { Search, Loader2, Crown, ShieldCheck, ChevronLeft, ChevronRight } from '
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table';
 import { apiClient } from '@/lib/apiClient';
@@ -23,7 +24,18 @@ interface AdminUserRow {
   resourceCounts: Record<string, number>;
 }
 
-export const UsersTable = () => {
+interface UsersTableProps {
+  // When set, renders a checkbox per row (plus a "select all on this page"
+  // header checkbox) so a caller (the broadcast panel's "custom selection"
+  // target) can build up an arbitrary list of user ids across pages/filters.
+  // Selection state is intentionally owned by the parent, not this
+  // component, so it survives this table's own filter/page changes.
+  selectable?: boolean;
+  selectedIds?: Set<string>;
+  onSelectionChange?: (ids: Set<string>) => void;
+}
+
+export const UsersTable = ({ selectable, selectedIds, onSelectionChange }: UsersTableProps = {}) => {
   const [rows, setRows] = useState<AdminUserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -60,6 +72,24 @@ export const UsersTable = () => {
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, plan, activity, moduleFilter, page]);
+
+  const toggleRow = (id: string) => {
+    if (!selectedIds || !onSelectionChange) return;
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onSelectionChange(next);
+  };
+
+  const pageRowIds = rows.map((r) => r.id);
+  const allOnPageSelected = pageRowIds.length > 0 && pageRowIds.every((id) => selectedIds?.has(id));
+  const toggleAllOnPage = () => {
+    if (!selectedIds || !onSelectionChange) return;
+    const next = new Set(selectedIds);
+    if (allOnPageSelected) pageRowIds.forEach((id) => next.delete(id));
+    else pageRowIds.forEach((id) => next.add(id));
+    onSelectionChange(next);
+  };
 
   useEffect(() => {
     setPage(1);
@@ -108,6 +138,11 @@ export const UsersTable = () => {
         <Table>
           <TableHeader>
             <TableRow>
+              {selectable && (
+                <TableHead className="w-10">
+                  <Checkbox checked={allOnPageSelected} onCheckedChange={toggleAllOnPage} aria-label="Select all on this page" />
+                </TableHead>
+              )}
               <TableHead>User</TableHead>
               <TableHead>Plan</TableHead>
               <TableHead>Modules</TableHead>
@@ -118,20 +153,29 @@ export const UsersTable = () => {
           <TableBody>
             {loading && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-8">
+                <TableCell colSpan={selectable ? 6 : 5} className="text-center py-8">
                   <Loader2 className="w-5 h-5 animate-spin mx-auto text-muted-foreground" />
                 </TableCell>
               </TableRow>
             )}
             {!loading && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={selectable ? 6 : 5} className="text-center py-8 text-muted-foreground">
                   No users match these filters.
                 </TableCell>
               </TableRow>
             )}
             {!loading && rows.map((u) => (
-              <TableRow key={u.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedUserId(u.id)}>
+              <TableRow
+                key={u.id}
+                className="cursor-pointer hover:bg-muted/50"
+                onClick={() => (selectable ? toggleRow(u.id) : setSelectedUserId(u.id))}
+              >
+                {selectable && (
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <Checkbox checked={selectedIds?.has(u.id) ?? false} onCheckedChange={() => toggleRow(u.id)} aria-label={`Select ${u.email}`} />
+                  </TableCell>
+                )}
                 <TableCell>
                   <p className="font-medium text-sm">{u.fullName || u.email}</p>
                   <p className="text-xs text-muted-foreground">{u.email}</p>

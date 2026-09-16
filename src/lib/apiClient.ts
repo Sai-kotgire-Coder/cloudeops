@@ -663,10 +663,16 @@ class ApiClient {
     });
   }
 
-  async sendBroadcastEmail(subject: string, message: string, target: 'all' | 'inactive' | 'pro' | 'free'): Promise<any> {
+  async sendBroadcastEmail(data: {
+    subject: string;
+    message: string;
+    target: 'all' | 'inactive' | 'pro' | 'free' | 'recent' | 'custom';
+    recentDays?: number;
+    userIds?: string[];
+  }): Promise<any> {
     return this.request('/admin/broadcast-email', {
       method: 'POST',
-      body: JSON.stringify({ subject, message, target }),
+      body: JSON.stringify(data),
     });
   }
 

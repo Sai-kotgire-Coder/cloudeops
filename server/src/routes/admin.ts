@@ -285,7 +285,12 @@ router.patch('/users/:id/plan', async (req: AuthRequest, res) => {
 const broadcastSchema = z.object({
   subject: z.string().min(1).max(200),
   message: z.string().min(1).max(20000),
-  target: z.enum(['all', 'inactive', 'pro', 'free']),
+  target: z.enum(['all', 'inactive', 'pro', 'free', 'recent', 'custom']),
+  // Only used when target === 'recent' -- "joined within the last N days".
+  recentDays: z.number().int().positive().max(365).optional(),
+  // Only used when target === 'custom' -- a hand-picked list of user ids
+  // from the admin's Users table.
+  userIds: z.array(z.string()).min(1).max(5000).optional(),
 });
 
 function wrapBroadcastHtml(message: string): string {
@@ -309,17 +314,29 @@ function wrapBroadcastHtml(message: string): string {
 // would need a real background job queue instead.
 router.post('/broadcast-email', async (req: AuthRequest, res) => {
   try {
-    const { subject, message, target } = broadcastSchema.parse(req.body);
+    const { subject, message, target, recentDays, userIds } = broadcastSchema.parse(req.body);
+
+    if (target === 'custom' && (!userIds || userIds.length === 0)) {
+      return res.status(400).json({ error: 'Select at least one user for a custom send' });
+    }
 
     const users = await prisma.user.findMany({
       where: { isVerified: true },
-      select: { id: true, email: true, isPro: true, gameState: { select: { updatedAt: true } } },
+      select: { id: true, email: true, isPro: true, createdAt: true, gameState: { select: { updatedAt: true } } },
     });
 
     let recipients = users;
     if (target === 'pro') recipients = users.filter((u) => u.isPro);
     if (target === 'free') recipients = users.filter((u) => !u.isPro);
     if (target === 'inactive') recipients = users.filter((u) => !isActive(u.gameState?.updatedAt ?? null));
+    if (target === 'recent') {
+      const windowMs = (recentDays ?? 7) * 24 * 60 * 60 * 1000;
+      recipients = users.filter((u) => u.createdAt.getTime() > Date.now() - windowMs);
+    }
+    if (target === 'custom') {
+      const idSet = new Set(userIds);
+      recipients = users.filter((u) => idSet.has(u.id));
+    }
 
     if (recipients.length === 0) {
       return res.status(400).json({ error: 'No matching recipients for that target' });
@@ -352,7 +369,11 @@ router.post('/broadcast-email', async (req: AuthRequest, res) => {
       data: {
         actorId: req.userId!,
         action: 'broadcast_email',
-        metadata: { subject, target, recipientCount: recipients.length, sent, failed }
+        metadata: {
+          subject, target, recipientCount: recipients.length, sent, failed,
+          ...(target === 'recent' && { recentDays: recentDays ?? 7 }),
+          ...(target === 'custom' && { requestedCount: userIds?.length ?? 0 })
+        }
       }
     });
 
