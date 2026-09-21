@@ -675,3 +675,16 @@ model Payment {
   @@map("payments")
 }
 
+// Public workshop registrations -- deliberately NOT tied to the User model,
+// since registrants land here from the public marketing site and may not
+// have (or ever create) a CloudOps account.
+model WorkshopRegistration {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  phone     String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("workshop_registrations")
+}
+

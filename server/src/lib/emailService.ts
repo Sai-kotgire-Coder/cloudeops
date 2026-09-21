@@ -76,15 +76,23 @@ export async function sendPasswordResetEmail(email: string, otp: string): Promis
 }
 
 // Generic send, for anything that isn't an OTP code (e.g. bulk campaign
-// emails in server/scripts/) -- reuses the same transporter/from-address
-// as the rest of this file so behavior stays consistent in one place.
-export async function sendEmail(to: string, subject: string, html: string, text: string): Promise<void> {
+// emails in server/scripts/, or a calendar invite attachment) -- reuses
+// the same transporter/from-address as the rest of this file so behavior
+// stays consistent in one place.
+export async function sendEmail(
+  to: string,
+  subject: string,
+  html: string,
+  text: string,
+  attachments?: { filename: string; content: string; contentType: string; method?: string }[]
+): Promise<void> {
   await transporter.sendMail({
     from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
     to,
     subject,
     html,
-    text
+    text,
+    ...(attachments && { attachments })
   });
 }
 

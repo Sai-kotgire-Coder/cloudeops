@@ -494,6 +494,11 @@ class ApiClient {
     return this.request('/payment/plan', { method: 'GET' });
   }
 
+  // Workshop registration (public, no account needed)
+  async registerForWorkshop(data: { name: string; email: string; phone?: string }): Promise<{ message: string }> {
+    return this.request('/workshop/register', { method: 'POST', body: JSON.stringify(data) });
+  }
+
   // Payment / plan
   async getPricing() {
     // Public endpoint, no auth header needed

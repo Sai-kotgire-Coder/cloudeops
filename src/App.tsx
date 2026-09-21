@@ -45,6 +45,7 @@ import DocsPage from "./pages/DocsPage.tsx";
 import CommunityLibraryPage from "./pages/CommunityLibraryPage.tsx";
 import SubmitContentPage from "./pages/SubmitContentPage.tsx";
 import MySubmissionsPage from "./pages/MySubmissionsPage.tsx";
+import WorkshopRegistrationPage from "./pages/WorkshopRegistrationPage.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 import { LearningSidebar } from "@/components/learning/LearningSidebar";
@@ -111,6 +112,7 @@ const App = () => {
             <Route path="/verify-otp" element={<VerifyOTPPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/auth/github/callback" element={<GitHubCallbackPage />} />
+            <Route path="/workshop" element={<WorkshopRegistrationPage />} />
 
             {/* Protected routes */}
             <Route
