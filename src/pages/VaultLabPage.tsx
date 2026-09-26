@@ -8,6 +8,7 @@ import { SecretEditor } from '@/components/vault/SecretEditor';
 import { PolicyEditor } from '@/components/vault/PolicyEditor';
 import { TokenAccessPanel } from '@/components/vault/TokenAccessPanel';
 import { LearningPanel } from '@/components/container/LearningPanel';
+import { ModuleLearningSection } from '@/components/learning/ModuleLearningSection';
 import type { LearningSectionId } from '@/data/dockerLearningContent';
 
 export default function VaultLabPage() {
@@ -55,6 +56,8 @@ export default function VaultLabPage() {
 
       <div className="flex-1 overflow-auto p-3 sm:p-4 md:p-6">
         <div className="max-w-[1800px] mx-auto space-y-6">
+          <ModuleLearningSection moduleId="vault" moduleLabel="Vault Lab" />
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="space-y-6">
               <EnginesPanel onLearnMore={openLearningPanel} />

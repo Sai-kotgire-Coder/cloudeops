@@ -6,6 +6,7 @@ export interface ModuleProgress {
   current: number;
   target: number;
   completed: boolean;
+  certificateEarned: boolean;
 }
 
 export interface Certificate {
@@ -15,9 +16,15 @@ export interface Certificate {
   issuedAt: string;
 }
 
+export interface ModuleRecommendation {
+  module: string;
+  reason: 'closest_to_completion' | 'not_started';
+}
+
 interface ProgressState {
   summary: ModuleProgress[];
   certificates: Certificate[];
+  recommendation: ModuleRecommendation | null;
   fetchSummary: () => Promise<void>;
   fetchCertificates: () => Promise<void>;
 }
@@ -25,11 +32,12 @@ interface ProgressState {
 export const useProgressStore = create<ProgressState>((set) => ({
   summary: [],
   certificates: [],
+  recommendation: null,
 
   fetchSummary: async () => {
     try {
-      const { summary } = await apiClient.getProgressSummary();
-      set({ summary: summary ?? [] });
+      const { summary, recommendation } = await apiClient.getProgressSummary();
+      set({ summary: summary ?? [], recommendation: recommendation ?? null });
     } catch (error) {
       console.error('Failed to fetch progress summary:', error);
     }

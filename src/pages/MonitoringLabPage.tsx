@@ -6,6 +6,7 @@ import { useLearningStore } from '@/store/learningStore';
 import { PanelsPanel } from '@/components/monitoring/PanelsPanel';
 import { RulesPanel } from '@/components/monitoring/RulesPanel';
 import { HistoryPanel } from '@/components/monitoring/HistoryPanel';
+import { ModuleLearningSection } from '@/components/learning/ModuleLearningSection';
 
 const EVALUATION_INTERVAL_MS = 4000;
 
@@ -50,6 +51,8 @@ export default function MonitoringLabPage() {
 
       <div className="flex-1 overflow-auto p-3 sm:p-4 md:p-6">
         <div className="max-w-[1800px] mx-auto space-y-6">
+          <ModuleLearningSection moduleId="monitoring" moduleLabel="Monitoring Lab" />
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <PanelsPanel onLearnMore={() => openTopic('monitoring')} />
             <div className="space-y-6">

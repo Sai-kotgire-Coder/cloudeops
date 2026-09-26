@@ -5,6 +5,7 @@ import { executeKubectlCommand, getKubectlAutocompleteSuggestions } from '@/lib/
 import { TerminalShell } from '@/components/cli/TerminalShell';
 import { useLearningStore } from '@/store/learningStore';
 import { LearningPanel } from '@/components/container/LearningPanel';
+import { ModuleLearningSection } from '@/components/learning/ModuleLearningSection';
 import type { LearningSectionId } from '@/data/dockerLearningContent';
 
 const WELCOME = `kubectl -- Kubernetes CLI Simulator v1.0
@@ -71,6 +72,8 @@ export default function KubectlLabPage() {
           </div>
         </div>
       </div>
+
+      <ModuleLearningSection moduleId="kubectl" moduleLabel="kubectl Lab" />
 
       <TerminalShell
         welcomeMessage={WELCOME}

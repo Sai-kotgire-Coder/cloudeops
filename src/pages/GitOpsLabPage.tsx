@@ -7,6 +7,7 @@ import { AppsPanel } from '@/components/gitops/AppsPanel';
 import { CommitPanel } from '@/components/gitops/CommitPanel';
 import { SyncPanel } from '@/components/gitops/SyncPanel';
 import { LearningPanel } from '@/components/container/LearningPanel';
+import { ModuleLearningSection } from '@/components/learning/ModuleLearningSection';
 import type { LearningSectionId } from '@/data/dockerLearningContent';
 
 export default function GitOpsLabPage() {
@@ -55,6 +56,8 @@ export default function GitOpsLabPage() {
 
       <div className="flex-1 overflow-auto p-3 sm:p-4 md:p-6">
         <div className="max-w-[1800px] mx-auto space-y-6">
+          <ModuleLearningSection moduleId="gitops" moduleLabel="GitOps Lab" />
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <AppsPanel
               selectedAppId={selectedAppId}

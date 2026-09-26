@@ -8,6 +8,7 @@ import { PlaybookEditor } from '@/components/ansible/PlaybookEditor';
 import { RunPanel } from '@/components/ansible/RunPanel';
 import { HostStatePanel } from '@/components/ansible/HostStatePanel';
 import { LearningPanel } from '@/components/container/LearningPanel';
+import { ModuleLearningSection } from '@/components/learning/ModuleLearningSection';
 import type { LearningSectionId } from '@/data/dockerLearningContent';
 
 export default function AnsibleLabPage() {
@@ -55,6 +56,8 @@ export default function AnsibleLabPage() {
 
       <div className="flex-1 overflow-auto p-3 sm:p-4 md:p-6">
         <div className="max-w-[1800px] mx-auto space-y-6">
+          <ModuleLearningSection moduleId="ansible" moduleLabel="Ansible Lab" />
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="space-y-6">
               <InventoryPanel onLearnMore={openLearningPanel} />

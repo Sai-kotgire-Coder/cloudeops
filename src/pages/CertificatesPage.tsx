@@ -8,6 +8,8 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { apiClient } from '@/lib/apiClient';
 import { printElementInNewWindow } from '@/lib/printIsolated';
+import { RecommendationCard } from '@/components/learning/RecommendationCard';
+import { QuizModal } from '@/components/learning/QuizModal';
 import { toast } from 'sonner';
 
 const MODULE_LABELS: Record<string, string> = {
@@ -24,7 +26,8 @@ function formatDate(dateStr: string): string {
 }
 
 export default function CertificatesPage() {
-  const { summary, certificates, fetchSummary, fetchCertificates } = useProgressStore();
+  const { summary, certificates, recommendation, fetchSummary, fetchCertificates } = useProgressStore();
+  const [quizModule, setQuizModule] = useState<string | null>(null);
   const fullName = useProfileStore((s) => s.fullName);
   const email = useAuthStore((s) => s.user?.email);
   const [loading, setLoading] = useState(true);
@@ -107,6 +110,8 @@ export default function CertificatesPage() {
             </div>
           ) : (
             <>
+              <RecommendationCard recommendation={recommendation} />
+
               <section>
                 <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Module progress</h2>
                 <div className="rounded-xl border border-border divide-y divide-border overflow-hidden">
@@ -121,7 +126,11 @@ export default function CertificatesPage() {
                         </div>
                         <Progress value={Math.min(100, (m.current / m.target) * 100)} />
                       </div>
-                      {m.completed && <Award className="w-5 h-5 text-amber-500 shrink-0" />}
+                      {m.certificateEarned ? (
+                        <Award className="w-5 h-5 text-amber-500 shrink-0" />
+                      ) : m.completed ? (
+                        <Button size="sm" className="shrink-0" onClick={() => setQuizModule(m.module)}>Take quiz</Button>
+                      ) : null}
                     </div>
                   ))}
                   {summary.length === 0 && (
@@ -158,6 +167,14 @@ export default function CertificatesPage() {
           )}
         </div>
       </div>
+
+      <QuizModal
+        moduleId={quizModule ?? ''}
+        moduleLabel={quizModule ? (MODULE_LABELS[quizModule] ?? quizModule) : ''}
+        open={!!quizModule}
+        onClose={() => setQuizModule(null)}
+        onCertificateAwarded={() => { fetchSummary(); fetchCertificates(); }}
+      />
 
       <Dialog open={!!openCert} onOpenChange={(open) => !open && setOpenCode(null)}>
         <DialogContent className="max-w-3xl print:max-w-none print:border-none print:shadow-none print:bg-transparent bg-transparent border-none shadow-none p-0">

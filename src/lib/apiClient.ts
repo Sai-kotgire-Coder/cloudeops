@@ -650,6 +650,20 @@ class ApiClient {
     return this.request(`/certificates/${code}`, { method: 'GET' });
   }
 
+  async getModuleQuiz(module: string): Promise<{ questions: { id: string; question: string; options: string[] }[]; passingScore: number }> {
+    return this.request(`/progress/${module}/quiz`, { method: 'GET' });
+  }
+
+  async submitModuleQuiz(module: string, answers: number[]): Promise<{
+    passed: boolean;
+    score: number;
+    total: number;
+    certificateAwarded: boolean;
+    results: { id: string; correct: boolean; correctIndex: number; explanation: string }[];
+  }> {
+    return this.request(`/progress/${module}/quiz`, { method: 'POST', body: JSON.stringify({ answers }) });
+  }
+
   // Referral program
   async getMyReferral(): Promise<any> {
     return this.request('/referral/me', { method: 'GET' });
