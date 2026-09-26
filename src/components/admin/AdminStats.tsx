@@ -1,4 +1,4 @@
-import { Users, ShieldCheck, Crown, Activity, IndianRupee, MoonStar } from 'lucide-react';
+import { Users, ShieldCheck, Crown, Activity, IndianRupee, MoonStar, Send, CircleCheck, CircleAlert } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 
 export interface AdminStatsData {
@@ -13,6 +13,14 @@ export interface AdminStatsData {
   totalRevenuePaise: number;
   completedPaymentCount: number;
   signups: { date: string; count: number }[];
+  lastBroadcast: {
+    subject: string | null;
+    target: string | null;
+    recipientCount: number;
+    sent: number;
+    failed: number;
+    createdAt: string;
+  } | null;
 }
 
 const StatCard = ({ icon: Icon, label, value, tone }: { icon: any; label: string; value: string | number; tone?: string }) => (
@@ -60,6 +68,35 @@ export const AdminStats = ({ stats }: { stats: AdminStatsData }) => {
             </BarChart>
           </ResponsiveContainer>
         </div>
+      </div>
+
+      <div className="bg-card border border-border rounded-xl p-4">
+        <p className="text-sm font-semibold mb-3 flex items-center gap-2">
+          <Send className="w-4 h-4 text-muted-foreground" />
+          Last broadcast
+        </p>
+        {stats.lastBroadcast ? (
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="min-w-0">
+              <p className="font-medium text-sm truncate">{stats.lastBroadcast.subject}</p>
+              <p className="text-xs text-muted-foreground">
+                To {stats.lastBroadcast.target} &middot; {new Date(stats.lastBroadcast.createdAt).toLocaleString()}
+              </p>
+            </div>
+            <div className="flex items-center gap-3 text-sm shrink-0">
+              <span className="flex items-center gap-1 text-green-600 dark:text-green-400">
+                <CircleCheck className="w-4 h-4" /> {stats.lastBroadcast.sent} sent
+              </span>
+              {stats.lastBroadcast.failed > 0 && (
+                <span className="flex items-center gap-1 text-destructive">
+                  <CircleAlert className="w-4 h-4" /> {stats.lastBroadcast.failed} failed
+                </span>
+              )}
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">No broadcast has been sent yet.</p>
+        )}
       </div>
     </div>
   );

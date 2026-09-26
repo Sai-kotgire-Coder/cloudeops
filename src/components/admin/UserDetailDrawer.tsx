@@ -5,9 +5,25 @@ import {
 } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { apiClient } from '@/lib/apiClient';
 import { MODULE_CATALOG } from '@/data/moduleCatalog';
+
+// 'none' isn't a real adminRole value -- it's this UI's stand-in for
+// "not an admin at all" (isAdmin: false), since a Select needs a string
+// value for every option including that one.
+const ROLE_OPTIONS = [
+  { value: 'none', label: 'Not an admin' },
+  { value: 'full', label: 'Full admin' },
+  { value: 'moderator', label: 'Moderator (submissions only)' },
+  { value: 'workshop_coordinator', label: 'Workshop coordinator (registrations only)' },
+];
+
+function roleSelectValue(detail: { isAdmin: boolean; adminRole: string | null }): string {
+  if (!detail.isAdmin) return 'none';
+  return detail.adminRole || 'full';
+}
 
 interface UserDetailDrawerProps {
   userId: string | null;
@@ -19,6 +35,7 @@ export const UserDetailDrawer = ({ userId, onClose, onPlanChanged }: UserDetailD
   const [detail, setDetail] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [updatingPlan, setUpdatingPlan] = useState(false);
+  const [updatingRole, setUpdatingRole] = useState(false);
 
   useEffect(() => {
     if (!userId) return;
@@ -42,6 +59,22 @@ export const UserDetailDrawer = ({ userId, onClose, onPlanChanged }: UserDetailD
       toast.error(err.message || 'Failed to update plan');
     } finally {
       setUpdatingPlan(false);
+    }
+  };
+
+  const handleRoleChange = async (value: string) => {
+    if (!detail) return;
+    setUpdatingRole(true);
+    try {
+      const isAdmin = value !== 'none';
+      const adminRole = value === 'full' || value === 'none' ? null : (value as 'moderator' | 'workshop_coordinator');
+      const result = await apiClient.updateUserRole(detail.id, isAdmin, adminRole);
+      setDetail({ ...detail, isAdmin: result.isAdmin, adminRole: result.adminRole });
+      toast.success(result.message);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update role');
+    } finally {
+      setUpdatingRole(false);
     }
   };
 
@@ -71,11 +104,25 @@ export const UserDetailDrawer = ({ userId, onClose, onPlanChanged }: UserDetailD
                 <Badge variant={detail.isVerified ? 'outline' : 'destructive'}>
                   {detail.isVerified ? 'Verified' : 'Unverified'}
                 </Badge>
-                {detail.isAdmin && <Badge variant="outline">Admin</Badge>}
+                {detail.isAdmin && <Badge variant="outline">Admin{detail.adminRole ? ` (${detail.adminRole.replace('_', ' ')})` : ''}</Badge>}
                 <Button size="sm" variant="outline" onClick={handleTogglePlan} disabled={updatingPlan}>
                   {updatingPlan ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : null}
                   {detail.isPro ? 'Revoke Pro' : 'Grant Pro (30 days)'}
                 </Button>
+              </div>
+
+              <div>
+                <p className="text-muted-foreground text-xs mb-1.5">Admin access</p>
+                <Select value={roleSelectValue(detail)} onValueChange={handleRoleChange} disabled={updatingRole}>
+                  <SelectTrigger className="w-full sm:w-72">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ROLE_OPTIONS.map((r) => (
+                      <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="grid grid-cols-2 gap-4 text-sm">

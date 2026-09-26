@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Check, X } from 'lucide-react';
+import { Loader2, Check, X, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -35,6 +35,18 @@ export const CommunitySubmissionsTable = () => {
   const [rejectNote, setRejectNote] = useState('');
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [acting, setActing] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await apiClient.exportSubmissionsCsv();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to export submissions');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const load = () => {
     setLoading(true);
@@ -65,16 +77,22 @@ export const CommunitySubmissionsTable = () => {
 
   return (
     <div className="space-y-4">
-      <Select value={status} onValueChange={setStatus}>
-        <SelectTrigger className="w-48">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="pending">Pending review</SelectItem>
-          <SelectItem value="approved">Approved</SelectItem>
-          <SelectItem value="rejected">Rejected</SelectItem>
-        </SelectContent>
-      </Select>
+      <div className="flex items-center gap-2">
+        <Select value={status} onValueChange={setStatus}>
+          <SelectTrigger className="w-48">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="pending">Pending review</SelectItem>
+            <SelectItem value="approved">Approved</SelectItem>
+            <SelectItem value="rejected">Rejected</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button variant="outline" className="gap-1.5" disabled={exporting} onClick={handleExport}>
+          {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+          Export CSV
+        </Button>
+      </div>
 
       {loading ? (
         <div className="flex items-center justify-center py-16">

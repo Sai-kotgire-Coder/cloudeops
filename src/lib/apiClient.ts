@@ -20,6 +20,7 @@ export interface User {
   email: string;
   isVerified?: boolean;
   isAdmin?: boolean;
+  adminRole?: string | null;
   hasPassword?: boolean;
   createdAt: string;
 }
@@ -246,6 +247,28 @@ class ApiClient {
     }
 
     return response.json();
+  }
+
+  // Fetches a CSV export with the auth header attached (a plain <a href>
+  // can't carry it) and saves it via a throwaway object URL + click, same
+  // end result as a normal browser download link.
+  private async downloadCsv(endpoint: string, fallbackFilename: string): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, { headers: this.getHeaders() });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Export failed' }));
+      throw new Error(error.error || 'Export failed');
+    }
+    const disposition = response.headers.get('Content-Disposition');
+    const filename = disposition?.match(/filename="([^"]+)"/)?.[1] || fallbackFilename;
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   }
 
   // Applications
@@ -499,6 +522,38 @@ class ApiClient {
     return this.request('/workshop/register', { method: 'POST', body: JSON.stringify(data) });
   }
 
+  async linkWorkshopRegistration(): Promise<{ linked: boolean; registered: boolean }> {
+    return this.request('/workshop/link', { method: 'POST' });
+  }
+
+  async getWorkshopCohort(): Promise<any> {
+    return this.request('/workshop/cohort', { method: 'GET' });
+  }
+
+  // Shareable public profile
+  async createProfileShareLink(): Promise<{ shareToken: string }> {
+    return this.request('/profile/share', { method: 'POST' });
+  }
+
+  async revokeProfileShareLink(): Promise<{ message: string }> {
+    return this.request('/profile/share', { method: 'DELETE' });
+  }
+
+  async getPublicProfile(token: string): Promise<any> {
+    const response = await fetch(`${API_BASE_URL}/public-profile/${token}`);
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Not found' }));
+      throw new Error(error.error || 'Failed to load profile');
+    }
+    return response.json();
+  }
+
+  // Global search (approved community submissions -- module/docs matches
+  // are computed client-side against static catalogs)
+  async search(q: string): Promise<{ submissions: { id: string; title: string; type: string; summary: string }[] }> {
+    return this.request(`/search?q=${encodeURIComponent(q)}`, { method: 'GET' });
+  }
+
   // Payment / plan
   async getPricing() {
     // Public endpoint, no auth header needed
@@ -613,6 +668,21 @@ class ApiClient {
     return this.request(`/community-submissions/${id}`, { method: 'GET' });
   }
 
+  async toggleSubmissionHelpful(id: string): Promise<{ helpfulByMe: boolean }> {
+    return this.request(`/community-submissions/${id}/helpful`, { method: 'POST' });
+  }
+
+  async getSubmissionComments(id: string): Promise<any> {
+    return this.request(`/community-submissions/${id}/comments`, { method: 'GET' });
+  }
+
+  async postSubmissionComment(id: string, body: string): Promise<any> {
+    return this.request(`/community-submissions/${id}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    });
+  }
+
   async getAdminSubmissions(params: { status?: string; page?: number; limit?: number } = {}): Promise<any> {
     const query = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
@@ -674,11 +744,43 @@ class ApiClient {
     target: 'all' | 'inactive' | 'pro' | 'free' | 'recent' | 'custom';
     recentDays?: number;
     userIds?: string[];
+    sendAt?: string;
   }): Promise<any> {
     return this.request('/admin/broadcast-email', {
       method: 'POST',
       body: JSON.stringify(data),
     });
+  }
+
+  async getScheduledBroadcasts(): Promise<any> {
+    return this.request('/admin/scheduled-broadcasts', { method: 'GET' });
+  }
+
+  async cancelScheduledBroadcast(id: string): Promise<any> {
+    return this.request(`/admin/scheduled-broadcasts/${id}`, { method: 'DELETE' });
+  }
+
+  async updateUserRole(id: string, isAdmin: boolean, adminRole?: 'moderator' | 'workshop_coordinator' | null): Promise<any> {
+    return this.request(`/admin/users/${id}/role`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isAdmin, adminRole }),
+    });
+  }
+
+  async exportUsersCsv(): Promise<void> {
+    return this.downloadCsv('/admin/users/export', 'users.csv');
+  }
+
+  async exportSubmissionsCsv(): Promise<void> {
+    return this.downloadCsv('/admin/submissions/export', 'submissions.csv');
+  }
+
+  async getAdminWorkshopRegistrations(page = 1): Promise<any> {
+    return this.request(`/admin/workshop-registrations?page=${page}`, { method: 'GET' });
+  }
+
+  async exportWorkshopRegistrationsCsv(): Promise<void> {
+    return this.downloadCsv('/admin/workshop-registrations/export', 'workshop-registrations.csv');
   }
 
   // Alerts

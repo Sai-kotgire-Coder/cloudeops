@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Send, Loader2, Check, FileEdit } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Send, Loader2, Check, FileEdit, Clock, CalendarClock, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -14,6 +14,14 @@ import { apiClient } from '@/lib/apiClient';
 import { EMAIL_TEMPLATES, CUSTOM_TEMPLATE_ID } from '@/data/emailTemplates';
 import { UsersTable } from './UsersTable';
 import type { AdminStatsData } from './AdminStats';
+
+interface ScheduledJob {
+  id: string;
+  subject: string;
+  target: string;
+  sendAt: string;
+  status: 'pending' | 'sent' | 'cancelled' | 'failed';
+}
 
 type Target = 'all' | 'inactive' | 'pro' | 'free' | 'recent' | 'custom';
 
@@ -35,6 +43,31 @@ export const BroadcastEmailPanel = ({ stats }: { stats: AdminStatsData | null })
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [sending, setSending] = useState(false);
+  const [scheduleForLater, setScheduleForLater] = useState(false);
+  const [sendAt, setSendAt] = useState('');
+  const [jobs, setJobs] = useState<ScheduledJob[]>([]);
+  const [loadingJobs, setLoadingJobs] = useState(true);
+
+  const loadJobs = () => {
+    setLoadingJobs(true);
+    apiClient
+      .getScheduledBroadcasts()
+      .then((data) => setJobs(data.jobs))
+      .catch(() => {}) // non-critical -- the send form still works without this list
+      .finally(() => setLoadingJobs(false));
+  };
+
+  useEffect(loadJobs, []);
+
+  const handleCancelJob = async (id: string) => {
+    try {
+      await apiClient.cancelScheduledBroadcast(id);
+      toast.success('Scheduled broadcast cancelled');
+      loadJobs();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to cancel');
+    }
+  };
 
   const handleSelectTemplate = (id: string) => {
     setTemplateId(id);
@@ -72,10 +105,14 @@ export const BroadcastEmailPanel = ({ stats }: { stats: AdminStatsData | null })
       ? selectedIds.size
       : null;
 
+  const sendAtDate = sendAt ? new Date(sendAt) : null;
+  const scheduleIsValid = !scheduleForLater || (sendAtDate !== null && sendAtDate.getTime() > Date.now());
+
   const canSend =
     subject.trim().length > 0 &&
     message.trim().length > 0 &&
-    (target !== 'custom' || selectedIds.size > 0);
+    (target !== 'custom' || selectedIds.size > 0) &&
+    scheduleIsValid;
 
   const handleSend = async () => {
     setSending(true);
@@ -86,13 +123,17 @@ export const BroadcastEmailPanel = ({ stats }: { stats: AdminStatsData | null })
         target,
         ...(target === 'recent' && { recentDays }),
         ...(target === 'custom' && { userIds: Array.from(selectedIds) }),
+        ...(scheduleForLater && sendAtDate && { sendAt: sendAtDate.toISOString() }),
       });
       toast.success(result.message);
       setSubject('');
       setMessage('');
       setTemplateId(CUSTOM_TEMPLATE_ID);
       setSelectedIds(new Set());
+      setScheduleForLater(false);
+      setSendAt('');
       setConfirmOpen(false);
+      if (scheduleForLater) loadJobs();
     } catch (err: any) {
       toast.error(err.message || 'Failed to send broadcast');
     } finally {
@@ -221,15 +262,34 @@ export const BroadcastEmailPanel = ({ stats }: { stats: AdminStatsData | null })
         </p>
       </div>
 
+      <div className="space-y-1.5">
+        <button
+          type="button"
+          onClick={() => setScheduleForLater((v) => !v)}
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+        >
+          <Clock className="w-3.5 h-3.5" />
+          {scheduleForLater ? 'Sending later — switch to send now' : 'Send now — click to schedule for later instead'}
+        </button>
+        {scheduleForLater && (
+          <Input
+            type="datetime-local"
+            value={sendAt}
+            onChange={(e) => setSendAt(e.target.value)}
+            className="w-64"
+          />
+        )}
+      </div>
+
       <Button onClick={() => setConfirmOpen(true)} disabled={!canSend} className="gap-2">
-        <Send className="w-4 h-4" />
-        Send Notification
+        {scheduleForLater ? <CalendarClock className="w-4 h-4" /> : <Send className="w-4 h-4" />}
+        {scheduleForLater ? 'Schedule Notification' : 'Send Notification'}
       </Button>
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Send this email now?</AlertDialogTitle>
+            <AlertDialogTitle>{scheduleForLater ? 'Schedule this email?' : 'Send this email now?'}</AlertDialogTitle>
             <AlertDialogDescription>
               This will email{' '}
               <strong>
@@ -239,19 +299,49 @@ export const BroadcastEmailPanel = ({ stats }: { stats: AdminStatsData | null })
                     ? `${selectedIds.size} hand-picked user${selectedIds.size === 1 ? '' : 's'}`
                     : TARGET_LABELS[target].toLowerCase()}
               </strong>
-              {targetCount !== null && target !== 'custom' ? ` (${recentCountIsExact || target !== 'recent' ? '~' : 'at least '}${targetCount} people)` : ''} with the subject "{subject}". This can't be
-              recalled once sent.
+              {targetCount !== null && target !== 'custom' ? ` (${recentCountIsExact || target !== 'recent' ? '~' : 'at least '}${targetCount} people)` : ''} with the subject "{subject}".{' '}
+              {scheduleForLater && sendAtDate
+                ? `It will send at ${sendAtDate.toLocaleString()}.`
+                : `This can't be recalled once sent.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={sending}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={(e) => { e.preventDefault(); handleSend(); }} disabled={sending} className="gap-2">
               {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              {sending ? 'Sending...' : 'Yes, send it'}
+              {sending ? (scheduleForLater ? 'Scheduling...' : 'Sending...') : (scheduleForLater ? 'Yes, schedule it' : 'Yes, send it')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <div className="pt-4 border-t border-border space-y-2">
+        <p className="text-sm font-semibold flex items-center gap-1.5">
+          <CalendarClock className="w-4 h-4 text-muted-foreground" />
+          Scheduled sends
+        </p>
+        {loadingJobs ? (
+          <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+        ) : jobs.filter((j) => j.status === 'pending').length === 0 ? (
+          <p className="text-xs text-muted-foreground">Nothing queued.</p>
+        ) : (
+          <div className="space-y-2">
+            {jobs.filter((j) => j.status === 'pending').map((j) => (
+              <div key={j.id} className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{j.subject}</p>
+                  <p className="text-xs text-muted-foreground">
+                    To {TARGET_LABELS[j.target as Target] ?? j.target} &middot; {new Date(j.sendAt).toLocaleString()}
+                  </p>
+                </div>
+                <Button size="icon" variant="ghost" className="shrink-0" onClick={() => handleCancelJob(j.id)}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 };

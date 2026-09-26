@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Search, Loader2, Crown, ShieldCheck, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Loader2, Crown, ShieldCheck, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -46,6 +46,18 @@ export const UsersTable = ({ selectable, selectedIds, onSelectionChange }: Users
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await apiClient.exportUsersCsv();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to export users');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const load = () => {
     setLoading(true);
@@ -132,6 +144,12 @@ export const UsersTable = ({ selectable, selectedIds, onSelectionChange }: Users
             ))}
           </SelectContent>
         </Select>
+        {!selectable && (
+          <Button variant="outline" className="gap-1.5" disabled={exporting} onClick={handleExport}>
+            {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            Export CSV
+          </Button>
+        )}
       </div>
 
       <div className="rounded-xl border border-border overflow-x-auto">
