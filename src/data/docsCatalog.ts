@@ -1,7 +1,7 @@
 import {
   Rocket, Activity, Target, Layers, Container, Server, Network, GitBranch,
   Zap, Terminal, Ticket, AlertTriangle, FileCode, ScrollText, Lock, Boxes,
-  GitMerge, LineChart, type LucideIcon,
+  GitMerge, LineChart, Award, Trophy, Gift, Library, Settings, type LucideIcon,
 } from 'lucide-react';
 
 export interface DocEntry {
@@ -12,7 +12,7 @@ export interface DocEntry {
   description: string;
   icon: LucideIcon;
   /** The group this doc is listed under in the sidebar */
-  group: 'Getting Started' | 'Simulator Basics' | 'Operations' | 'Infrastructure Labs';
+  group: 'Getting Started' | 'Simulator Basics' | 'Operations' | 'Infrastructure Labs' | 'Progress & Community';
   /** If set, matches a MODULE_CATALOG id -- powers the "Open Module" button and live stats */
   moduleId?: string;
 }
@@ -39,9 +39,15 @@ export const DOCS_CATALOG: DocEntry[] = [
   { id: 'kubectl', title: 'kubectl Lab', description: 'A real terminal for Kubernetes-style commands', icon: Boxes, group: 'Infrastructure Labs', moduleId: 'kubectl' },
   { id: 'gitops', title: 'GitOps Lab', description: 'Continuous deployment: commit, sync & self-heal', icon: GitMerge, group: 'Infrastructure Labs', moduleId: 'gitops' },
   { id: 'monitoring', title: 'Monitoring Lab', description: 'Dashboards and alert rules on your live metrics', icon: LineChart, group: 'Infrastructure Labs', moduleId: 'monitoring' },
+
+  { id: 'certificates', title: 'Certificates & Quizzes', description: 'Learning paths, milestone quizzes, and earning certificates', icon: Award, group: 'Progress & Community' },
+  { id: 'leaderboard', title: 'Leaderboard', description: 'How score works, and the workshop cohort view', icon: Trophy, group: 'Progress & Community' },
+  { id: 'referrals', title: 'Referral Program', description: 'Your referral code and how the reward works', icon: Gift, group: 'Progress & Community' },
+  { id: 'community-library', title: 'Community Library', description: 'Submitting, reviewing, and reacting to user content', icon: Library, group: 'Progress & Community' },
+  { id: 'account-plans', title: 'My Account & Plans', description: 'Profile, security, module picker, and Free vs. Pro', icon: Settings, group: 'Progress & Community' },
 ];
 
-export const DOC_GROUPS: DocEntry['group'][] = ['Getting Started', 'Simulator Basics', 'Operations', 'Infrastructure Labs'];
+export const DOC_GROUPS: DocEntry['group'][] = ['Getting Started', 'Simulator Basics', 'Operations', 'Infrastructure Labs', 'Progress & Community'];
 
 export function getDocEntry(id: string): DocEntry | undefined {
   return DOCS_CATALOG.find((d) => d.id === id);
