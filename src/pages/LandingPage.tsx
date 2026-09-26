@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { MODULE_CATALOG } from '@/data/moduleCatalog';
+import { apiClient, type PublicWorkshop } from '@/lib/apiClient';
 
 // ============================================================================
 // Interactive terminal -- a visitor can pick which command actually "runs"
@@ -261,8 +262,22 @@ function ScrollProgressBar() {
   );
 }
 
+function formatWorkshopDateRange(startAt: string, dailyCount: number): string {
+  const start = new Date(startAt);
+  const opts: Intl.DateTimeFormatOptions = { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric' };
+  if (dailyCount <= 1) return start.toLocaleDateString('en-US', opts).toUpperCase();
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + (dailyCount - 1));
+  return `${start.toLocaleDateString('en-US', opts).toUpperCase()}–${end.getUTCDate()}`;
+}
+
 export default function LandingPage() {
   const highlightModules = MODULE_CATALOG.filter((m) => HIGHLIGHT_MODULE_IDS.includes(m.id));
+  const [workshop, setWorkshop] = useState<PublicWorkshop | null>(null);
+
+  useEffect(() => {
+    apiClient.getCurrentWorkshop().then((data) => setWorkshop(data.workshop)).catch(() => {});
+  }, []);
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
@@ -341,31 +356,36 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Workshop promo */}
-      <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-16">
-        <motion.div {...fadeUp}>
-          <Link to="/workshop" className="block group">
-            <div className="relative overflow-hidden rounded-2xl border border-primary/25 bg-gradient-to-r from-primary/10 via-card to-card p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 hover:border-primary/50 transition-colors">
-              <div className="flex items-start gap-4">
-                <div className="w-11 h-11 rounded-xl bg-primary/15 border border-primary/30 flex items-center justify-center shrink-0">
-                  <CalendarDays className="w-5 h-5 text-primary" />
+      {/* Workshop promo -- only rendered when an admin has a published,
+          not-yet-finished workshop scheduled (see GET /api/workshop/current) */}
+      {workshop && (
+        <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-16">
+          <motion.div {...fadeUp}>
+            <Link to="/workshop" className="block group">
+              <div className="relative overflow-hidden rounded-2xl border border-primary/25 bg-gradient-to-r from-primary/10 via-card to-card p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 hover:border-primary/50 transition-colors">
+                <div className="flex items-start gap-4">
+                  <div className="w-11 h-11 rounded-xl bg-primary/15 border border-primary/30 flex items-center justify-center shrink-0">
+                    <CalendarDays className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-mono text-primary mb-1">
+                      FREE {workshop.isOnline ? 'ONLINE ' : ''}WORKSHOP · {formatWorkshopDateRange(workshop.startAt, workshop.dailyCount)}
+                    </p>
+                    <h3 className="font-bold text-lg">{workshop.title}</h3>
+                    <p className="text-sm text-muted-foreground mt-1 max-w-xl">
+                      {workshop.summary}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs font-mono text-primary mb-1">FREE WEEKEND WORKSHOP · OCT 3–4</p>
-                  <h3 className="font-bold text-lg">The Other Side of Software</h3>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    A hands-on weekend into DevOps &amp; SRE careers — for students &amp; freshers, no experience needed.
-                  </p>
-                </div>
+                <span className="inline-flex items-center gap-1.5 text-sm font-medium text-primary shrink-0 group-hover:gap-2.5 transition-all">
+                  Register free
+                  <ArrowRight className="w-4 h-4" />
+                </span>
               </div>
-              <span className="inline-flex items-center gap-1.5 text-sm font-medium text-primary shrink-0 group-hover:gap-2.5 transition-all">
-                Register free
-                <ArrowRight className="w-4 h-4" />
-              </span>
-            </div>
-          </Link>
-        </motion.div>
-      </section>
+            </Link>
+          </motion.div>
+        </section>
+      )}
 
       {/* Stats strip */}
       <section className="border-y border-border bg-card/50">

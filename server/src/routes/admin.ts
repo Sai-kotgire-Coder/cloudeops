@@ -808,26 +808,157 @@ router.patch('/submissions/:id', moderatorOnly, async (req: AuthRequest, res) =>
 
 const workshopCoordinatorOnly = requireAdminRole('workshop_coordinator');
 
-// GET /api/admin/workshop-registrations -- who signed up for the workshop,
-// newest first. There's no admin-facing view of this at all today (the
-// public /workshop page writes rows nobody in the admin panel can see).
+const workshopSchema = z.object({
+  title: z.string().min(1).max(200),
+  summary: z.string().min(1).max(2000),
+  highlights: z.array(z.string().min(1).max(300)).max(10).default([]),
+  location: z.string().min(1).max(500),
+  isOnline: z.boolean().default(true),
+  // Sent as ISO datetimes from a <input type="datetime-local"> -- the form
+  // collects IST wall-clock time and converts to UTC client-side before
+  // this ever reaches the server, same as the scheduled-broadcast form.
+  startAt: z.string().datetime(),
+  endAt: z.string().datetime(),
+  dailyCount: z.number().int().min(1).max(14),
+  isPublished: z.boolean().default(false),
+});
+
+// GET /api/admin/workshops -- every workshop ever scheduled, newest first.
+// This is the "Manage Workshops" list -- create/edit/publish happens here.
+router.get('/workshops', workshopCoordinatorOnly, async (_req, res) => {
+  try {
+    const workshops = await prisma.workshop.findMany({
+      orderBy: { startAt: 'desc' },
+      include: { _count: { select: { registrations: true } } },
+    });
+    res.json({ workshops });
+  } catch (error) {
+    console.error('Admin list workshops error:', error);
+    res.status(500).json({ error: 'Failed to load workshops' });
+  }
+});
+
+// POST /api/admin/workshops -- schedule a new workshop. Starts unpublished
+// unless the form explicitly checks "Publish" -- lets an admin draft one
+// before it's visible on the public site.
+router.post('/workshops', workshopCoordinatorOnly, async (req: AuthRequest, res) => {
+  try {
+    const data = workshopSchema.parse(req.body);
+
+    const workshop = await prisma.workshop.create({
+      data: {
+        ...data,
+        startAt: new Date(data.startAt),
+        endAt: new Date(data.endAt),
+        createdById: req.userId!,
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        actorId: req.userId!,
+        action: 'create_workshop',
+        targetType: 'workshop',
+        targetId: workshop.id,
+        metadata: { title: workshop.title, isPublished: workshop.isPublished },
+      },
+    });
+
+    res.status(201).json(workshop);
+  } catch (error) {
+    if (error instanceof z.ZodError) return res.status(400).json({ error: 'Invalid input', details: error.errors });
+    console.error('Admin create workshop error:', error);
+    res.status(500).json({ error: 'Failed to create workshop' });
+  }
+});
+
+// PATCH /api/admin/workshops/:id -- edit any field, including toggling
+// isPublished (the only thing that controls whether it's live on the
+// public site -- see GET /api/workshop/current).
+router.patch('/workshops/:id', workshopCoordinatorOnly, async (req: AuthRequest, res) => {
+  try {
+    const data = workshopSchema.partial().parse(req.body);
+    const existing = await prisma.workshop.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ error: 'Workshop not found' });
+
+    const workshop = await prisma.workshop.update({
+      where: { id: req.params.id },
+      data: {
+        ...data,
+        ...(data.startAt && { startAt: new Date(data.startAt) }),
+        ...(data.endAt && { endAt: new Date(data.endAt) }),
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        actorId: req.userId!,
+        action: 'update_workshop',
+        targetType: 'workshop',
+        targetId: workshop.id,
+        metadata: { title: workshop.title, isPublished: workshop.isPublished },
+      },
+    });
+
+    res.json(workshop);
+  } catch (error) {
+    if (error instanceof z.ZodError) return res.status(400).json({ error: 'Invalid input', details: error.errors });
+    console.error('Admin update workshop error:', error);
+    res.status(500).json({ error: 'Failed to update workshop' });
+  }
+});
+
+// DELETE /api/admin/workshops/:id -- also drops its registrations (FK
+// cascade). Meant for a draft created by mistake, not a live one with real
+// registrants -- the confirm dialog on the frontend warns when there are any.
+router.delete('/workshops/:id', workshopCoordinatorOnly, async (req: AuthRequest, res) => {
+  try {
+    const existing = await prisma.workshop.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ error: 'Workshop not found' });
+
+    await prisma.workshop.delete({ where: { id: req.params.id } });
+
+    await prisma.auditLog.create({
+      data: {
+        actorId: req.userId!,
+        action: 'delete_workshop',
+        targetType: 'workshop',
+        targetId: req.params.id,
+        metadata: { title: existing.title },
+      },
+    });
+
+    res.json({ message: 'Workshop deleted' });
+  } catch (error) {
+    console.error('Admin delete workshop error:', error);
+    res.status(500).json({ error: 'Failed to delete workshop' });
+  }
+});
+
+// GET /api/admin/workshop-registrations -- who signed up, newest first.
+// Optionally scoped to one workshop (?workshopId=) now that more than one
+// can exist; omitted shows every registration across every workshop.
 router.get('/workshop-registrations', workshopCoordinatorOnly, async (req, res) => {
   try {
+    const workshopId = req.query.workshopId as string | undefined;
     const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string, 10) || 50));
+    const where = workshopId ? { workshopId } : {};
 
     const [registrations, total, linkedCount] = await Promise.all([
       prisma.workshopRegistration.findMany({
+        where,
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
+        include: { workshop: { select: { title: true } } },
       }),
-      prisma.workshopRegistration.count(),
-      prisma.workshopRegistration.count({ where: { userId: { not: null } } }),
+      prisma.workshopRegistration.count({ where }),
+      prisma.workshopRegistration.count({ where: { ...where, userId: { not: null } } }),
     ]);
 
     res.json({
-      registrations,
+      registrations: registrations.map((r) => ({ ...r, workshopTitle: r.workshop.title, workshop: undefined })),
       total,
       linkedCount,
       page,
@@ -839,14 +970,21 @@ router.get('/workshop-registrations', workshopCoordinatorOnly, async (req, res) 
   }
 });
 
-// GET /api/admin/workshop-registrations/export -- CSV of every registrant,
-// for coordinating the actual workshop (invites, attendance, follow-up).
-router.get('/workshop-registrations/export', workshopCoordinatorOnly, async (_req, res) => {
+// GET /api/admin/workshop-registrations/export -- CSV of every registrant
+// (optionally one workshop via ?workshopId=), for coordinating the actual
+// workshop (invites, attendance, follow-up).
+router.get('/workshop-registrations/export', workshopCoordinatorOnly, async (req, res) => {
   try {
-    const registrations = await prisma.workshopRegistration.findMany({ orderBy: { createdAt: 'desc' } });
+    const workshopId = req.query.workshopId as string | undefined;
+    const registrations = await prisma.workshopRegistration.findMany({
+      where: workshopId ? { workshopId } : {},
+      orderBy: { createdAt: 'desc' },
+      include: { workshop: { select: { title: true } } },
+    });
 
     const csv = toCsv(
       registrations.map((r) => ({
+        workshop: r.workshop.title,
         name: r.name,
         email: r.email,
         phone: r.phone ?? '',
@@ -854,6 +992,7 @@ router.get('/workshop-registrations/export', workshopCoordinatorOnly, async (_re
         registeredAt: r.createdAt,
       })),
       [
+        { key: 'workshop', label: 'Workshop' },
         { key: 'name', label: 'Name' },
         { key: 'email', label: 'Email' },
         { key: 'phone', label: 'Phone' },

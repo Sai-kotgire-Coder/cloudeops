@@ -103,6 +103,7 @@ model User {
   submissionComments     SubmissionComment[]
   scheduledBroadcasts    ScheduledBroadcast[]
   workshopRegistrations  WorkshopRegistration[]
+  workshopsCreated       Workshop[]
 
   @@map("users")
 }
@@ -754,23 +755,61 @@ model Payment {
   @@map("payments")
 }
 
+// An admin-scheduled workshop -- title/description/location/timing are all
+// filled in through the admin "Manage Workshops" form (see admin.ts), not
+// hardcoded. The public /workshop page and the landing page's promo card
+// both render whatever GET /api/workshop/current resolves to (the
+// earliest published workshop whose last day hasn't passed yet), so
+// scheduling a new one is exactly "fill the form, publish it."
+model Workshop {
+  id          String   @id @default(uuid())
+  title       String
+  summary     String   @db.Text
+  // Plain bullet points shown as "what to expect" -- kept as a string array
+  // rather than markdown since it's always a short, flat list.
+  highlights  String[]
+  location    String
+  isOnline    Boolean  @default(true) @map("is_online")
+  // First day's start/end instant (UTC). dailyCount > 1 repeats the same
+  // clock time on each following consecutive day -- same recurrence model
+  // buildRecurringInviteIcs() already expected from the old hardcoded WORKSHOP.
+  startAt     DateTime @map("start_at")
+  endAt       DateTime @map("end_at")
+  dailyCount  Int      @default(1) @map("daily_count")
+  isPublished Boolean  @default(false) @map("is_published")
+  createdById String   @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  createdBy     User                   @relation(fields: [createdById], references: [id])
+  registrations WorkshopRegistration[]
+
+  @@index([isPublished, startAt])
+  @@map("workshops")
+}
+
 // Public workshop registrations -- registrants land here from the public
 // marketing site and may not have (or ever create) a CloudOps account, so
 // userId stays optional. It's set two ways: at registration time if the
-// visitor was logged in, or backfilled on a later login when the account
-// email matches an existing anonymous registration (see auth.ts login
-// handler) -- both are best-effort, not guaranteed, matches for the
-// workshop-cohort leaderboard feature.
+// visitor was logged in, or backfilled later via POST /api/workshop/link
+// when the account email matches an existing anonymous registration --
+// both are best-effort, not guaranteed, matches for the workshop-cohort
+// leaderboard feature. Unique per [workshopId, email] rather than a bare
+// unique on email, so the same person can register for a later workshop
+// without being told "you're already registered."
 model WorkshopRegistration {
-  id        String   @id @default(uuid())
-  userId    String?  @map("user_id")
-  name      String
-  email     String   @unique
-  phone     String?
-  createdAt DateTime @default(now()) @map("created_at")
+  id         String   @id @default(uuid())
+  workshopId String   @map("workshop_id")
+  userId     String?  @map("user_id")
+  name       String
+  email      String
+  phone      String?
+  createdAt  DateTime @default(now()) @map("created_at")
 
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  workshop Workshop @relation(fields: [workshopId], references: [id], onDelete: Cascade)
+  user     User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
+  @@unique([workshopId, email])
   @@index([userId])
   @@map("workshop_registrations")
 }

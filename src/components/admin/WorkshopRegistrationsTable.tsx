@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { Loader2, Download, ChevronLeft, ChevronRight, Link2, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table';
-import { apiClient } from '@/lib/apiClient';
+import { apiClient, type AdminWorkshop } from '@/lib/apiClient';
 import { toast } from 'sonner';
 
 interface Registration {
@@ -12,6 +13,7 @@ interface Registration {
   email: string;
   phone: string | null;
   userId: string | null;
+  workshopTitle: string;
   createdAt: string;
 }
 
@@ -23,11 +25,17 @@ export const WorkshopRegistrationsTable = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [workshops, setWorkshops] = useState<AdminWorkshop[]>([]);
+  const [workshopId, setWorkshopId] = useState<string>('all');
+
+  useEffect(() => {
+    apiClient.getAdminWorkshops().then((data) => setWorkshops(data.workshops)).catch(() => {});
+  }, []);
 
   useEffect(() => {
     setLoading(true);
     apiClient
-      .getAdminWorkshopRegistrations(page)
+      .getAdminWorkshopRegistrations(page, workshopId === 'all' ? undefined : workshopId)
       .then((data) => {
         setRows(data.registrations);
         setTotal(data.total);
@@ -36,12 +44,14 @@ export const WorkshopRegistrationsTable = () => {
       })
       .catch((err) => toast.error(err.message || 'Failed to load workshop registrations'))
       .finally(() => setLoading(false));
-  }, [page]);
+  }, [page, workshopId]);
+
+  useEffect(() => setPage(1), [workshopId]);
 
   const handleExport = async () => {
     setExporting(true);
     try {
-      await apiClient.exportWorkshopRegistrationsCsv();
+      await apiClient.exportWorkshopRegistrationsCsv(workshopId === 'all' ? undefined : workshopId);
     } catch (err: any) {
       toast.error(err.message || 'Failed to export registrations');
     } finally {
@@ -52,10 +62,21 @@ export const WorkshopRegistrationsTable = () => {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <p className="text-sm text-muted-foreground">
-          <span className="font-semibold text-foreground">{total}</span> registered &middot;{' '}
-          <span className="font-semibold text-foreground">{linkedCount}</span> with a CloudOps account
-        </p>
+        <div className="flex items-center gap-3 flex-wrap">
+          <Select value={workshopId} onValueChange={setWorkshopId}>
+            <SelectTrigger className="w-56"><SelectValue placeholder="All workshops" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All workshops</SelectItem>
+              {workshops.map((w) => (
+                <SelectItem key={w.id} value={w.id}>{w.title}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-sm text-muted-foreground">
+            <span className="font-semibold text-foreground">{total}</span> registered &middot;{' '}
+            <span className="font-semibold text-foreground">{linkedCount}</span> with a CloudOps account
+          </p>
+        </div>
         <Button variant="outline" className="gap-1.5" disabled={exporting} onClick={handleExport}>
           {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
           Export CSV
@@ -67,6 +88,7 @@ export const WorkshopRegistrationsTable = () => {
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
+              <TableHead>Workshop</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>Phone</TableHead>
               <TableHead>Account</TableHead>
@@ -76,14 +98,14 @@ export const WorkshopRegistrationsTable = () => {
           <TableBody>
             {loading && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-8">
+                <TableCell colSpan={6} className="text-center py-8">
                   <Loader2 className="w-5 h-5 animate-spin mx-auto text-muted-foreground" />
                 </TableCell>
               </TableRow>
             )}
             {!loading && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                   No one has registered yet.
                 </TableCell>
               </TableRow>
@@ -91,6 +113,7 @@ export const WorkshopRegistrationsTable = () => {
             {!loading && rows.map((r) => (
               <TableRow key={r.id}>
                 <TableCell className="font-medium text-sm">{r.name}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{r.workshopTitle}</TableCell>
                 <TableCell className="text-sm flex items-center gap-1.5">
                   <Mail className="w-3.5 h-3.5 text-muted-foreground" />
                   {r.email}

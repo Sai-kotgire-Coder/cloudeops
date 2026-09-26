@@ -159,20 +159,94 @@ export default function CertificatesPage() {
       </div>
 
       <Dialog open={!!openCert} onOpenChange={(open) => !open && setOpenCode(null)}>
-        <DialogContent className="max-w-xl print:max-w-none print:border-none print:shadow-none">
+        <DialogContent className="max-w-3xl print:max-w-none print:border-none print:shadow-none print:bg-transparent bg-transparent border-none shadow-none p-0">
+          {/* DialogContent needs a title in the DOM for screen readers even
+              though this certificate has its own visual "Certificate of
+              Completion" heading below -- kept visually hidden, not removed. */}
+          <DialogTitle className="sr-only">Certificate of Completion</DialogTitle>
           {openCert && (
-            <div id="certificate-print-area" className="text-center py-6 px-2">
-              <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground mb-4">CloudOps Simulator</p>
-              <Award className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-              <DialogTitle className="text-2xl font-bold mb-1">Certificate of Completion</DialogTitle>
-              <p className="text-sm text-muted-foreground mb-6">This certifies that</p>
-              <p className="text-xl font-semibold mb-6">{recipientName}</p>
-              <p className="text-sm text-muted-foreground mb-1">has successfully completed the</p>
-              <p className="text-lg font-bold text-primary mb-6">{MODULE_LABELS[openCert.module] ?? openCert.module}</p>
-              <p className="text-xs text-muted-foreground mb-6">Issued on {formatDate(openCert.issuedAt)}</p>
-              <p className="text-[10px] font-mono text-muted-foreground">Certificate code: {openCert.code}</p>
+            <div id="certificate-print-area">
+              <div
+                className="relative mx-auto w-full aspect-[1.414/1] p-3 sm:p-4"
+                style={{ background: '#f6f1e4', color: '#1f2937' }}
+              >
+                {/* Outer + inner rule, the classic double-line certificate border */}
+                <div className="absolute inset-3 sm:inset-4 border-[3px]" style={{ borderColor: '#b8862f' }} />
+                <div className="absolute inset-[18px] sm:inset-6 border" style={{ borderColor: '#b8862f' }} />
 
-              <div className="mt-6 print:hidden">
+                <div className="relative h-full flex flex-col items-center justify-between text-center px-6 sm:px-14 py-6 sm:py-10">
+                  <div className="flex flex-col items-center">
+                    <p
+                      className="text-[10px] sm:text-xs uppercase tracking-[0.4em]"
+                      style={{ color: '#b8862f', fontFamily: "'Space Grotesk', sans-serif" }}
+                    >
+                      CloudOps Simulator
+                    </p>
+                    <h2
+                      className="mt-3 sm:mt-4 text-2xl sm:text-4xl"
+                      style={{ fontFamily: "'Playfair Display', serif", fontWeight: 700, color: '#1f2937' }}
+                    >
+                      Certificate of Completion
+                    </h2>
+                    <div className="mt-3 h-px w-24 sm:w-32" style={{ background: '#b8862f' }} />
+                  </div>
+
+                  <div className="flex flex-col items-center">
+                    <p
+                      className="text-sm sm:text-base italic"
+                      style={{ fontFamily: "'Cormorant Garamond', serif", color: '#57534e' }}
+                    >
+                      This certifies that
+                    </p>
+                    <p
+                      className="mt-2 sm:mt-3 text-3xl sm:text-5xl"
+                      style={{ fontFamily: "'Playfair Display', serif", fontWeight: 800, color: '#1f2937' }}
+                    >
+                      {recipientName}
+                    </p>
+                    <p
+                      className="mt-4 sm:mt-6 text-sm sm:base"
+                      style={{ fontFamily: "'Cormorant Garamond', serif", color: '#57534e' }}
+                    >
+                      has successfully completed the
+                    </p>
+                    <p
+                      className="mt-1 text-xl sm:text-2xl font-semibold"
+                      style={{ color: '#8a5a1d', fontFamily: "'Playfair Display', serif" }}
+                    >
+                      {MODULE_LABELS[openCert.module] ?? openCert.module}
+                    </p>
+                  </div>
+
+                  <div className="w-full flex items-end justify-between gap-4">
+                    <div className="text-left">
+                      <p className="text-xs sm:text-sm font-medium" style={{ borderTop: '1px solid #a8a29e', paddingTop: 4, minWidth: 140 }}>
+                        {formatDate(openCert.issuedAt)}
+                      </p>
+                      <p className="text-[10px] sm:text-xs uppercase tracking-widest mt-0.5" style={{ color: '#78716c' }}>
+                        Date Issued
+                      </p>
+                    </div>
+
+                    {/* Wax-seal style badge, the traditional certificate authenticity mark */}
+                    <div className="relative w-14 h-14 sm:w-20 sm:h-20 shrink-0 rounded-full flex items-center justify-center" style={{ background: '#b8862f' }}>
+                      <div className="absolute inset-1.5 rounded-full border" style={{ borderColor: '#f6f1e4' }} />
+                      <Award className="w-6 h-6 sm:w-9 sm:h-9" style={{ color: '#f6f1e4' }} />
+                    </div>
+
+                    <div className="text-right">
+                      <p className="text-xs sm:text-sm font-mono font-medium" style={{ borderTop: '1px solid #a8a29e', paddingTop: 4, minWidth: 140 }}>
+                        {openCert.code}
+                      </p>
+                      <p className="text-[10px] sm:text-xs uppercase tracking-widest mt-0.5" style={{ color: '#78716c' }}>
+                        Certificate No.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 flex justify-center print:hidden">
                 <Button size="sm" variant="outline" className="gap-2" onClick={() => window.print()}>
                   <Printer className="w-4 h-4" />
                   Print / Save as PDF

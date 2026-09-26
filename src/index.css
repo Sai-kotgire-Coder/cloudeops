@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;0,800;1,600&family=Cormorant+Garamond:wght@500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -256,8 +256,24 @@
 }
 
 /* Printing a certificate (CertificatesPage) should show only the
-   certificate itself, not the rest of the app shell behind the dialog. */
+   certificate itself, as one landscape page, not the rest of the app shell
+   behind the dialog. visibility:hidden alone isn't enough here -- a hidden
+   element still keeps its layout height, so the (tall, scrollable) app
+   behind the dialog was still contributing to the page's total height and
+   forcing a second, blank printed page. Collapsing html/body to zero
+   height with overflow hidden removes that phantom height entirely, and
+   the certificate (pulled out of flow via position:fixed) renders on top,
+   centered, as the only content on the one page @page below defines. */
 @media print {
+  @page {
+    size: landscape;
+    margin: 0;
+  }
+  html,
+  body {
+    height: 0 !important;
+    overflow: hidden !important;
+  }
   body * {
     visibility: hidden;
   }
@@ -268,6 +284,11 @@
   #certificate-print-area {
     position: fixed;
     inset: 0;
-    margin: auto;
+    width: 100vw;
+    height: 100vh;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 }

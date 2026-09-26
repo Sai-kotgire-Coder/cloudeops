@@ -30,6 +30,25 @@ export interface AuthResponse {
   user: User;
 }
 
+export interface PublicWorkshop {
+  id: string;
+  title: string;
+  summary: string;
+  highlights: string[];
+  location: string;
+  isOnline: boolean;
+  startAt: string;
+  endAt: string;
+  dailyCount: number;
+}
+
+export interface AdminWorkshop extends PublicWorkshop {
+  isPublished: boolean;
+  createdAt: string;
+  updatedAt: string;
+  _count: { registrations: number };
+}
+
 export interface RegisterResponse {
   message: string;
   email: string;
@@ -518,7 +537,13 @@ class ApiClient {
   }
 
   // Workshop registration (public, no account needed)
-  async registerForWorkshop(data: { name: string; email: string; phone?: string }): Promise<{ message: string }> {
+  async getCurrentWorkshop(): Promise<{ workshop: PublicWorkshop | null }> {
+    const response = await fetch(`${API_BASE_URL}/workshop/current`);
+    if (!response.ok) throw new Error('Failed to load workshop');
+    return response.json();
+  }
+
+  async registerForWorkshop(data: { workshopId: string; name: string; email: string; phone?: string }): Promise<{ message: string }> {
     return this.request('/workshop/register', { method: 'POST', body: JSON.stringify(data) });
   }
 
@@ -775,12 +800,51 @@ class ApiClient {
     return this.downloadCsv('/admin/submissions/export', 'submissions.csv');
   }
 
-  async getAdminWorkshopRegistrations(page = 1): Promise<any> {
-    return this.request(`/admin/workshop-registrations?page=${page}`, { method: 'GET' });
+  async getAdminWorkshopRegistrations(page = 1, workshopId?: string): Promise<any> {
+    const query = new URLSearchParams({ page: String(page) });
+    if (workshopId) query.set('workshopId', workshopId);
+    return this.request(`/admin/workshop-registrations?${query.toString()}`, { method: 'GET' });
   }
 
-  async exportWorkshopRegistrationsCsv(): Promise<void> {
-    return this.downloadCsv('/admin/workshop-registrations/export', 'workshop-registrations.csv');
+  async exportWorkshopRegistrationsCsv(workshopId?: string): Promise<void> {
+    const query = workshopId ? `?workshopId=${workshopId}` : '';
+    return this.downloadCsv(`/admin/workshop-registrations/export${query}`, 'workshop-registrations.csv');
+  }
+
+  async getAdminWorkshops(): Promise<{ workshops: AdminWorkshop[] }> {
+    return this.request('/admin/workshops', { method: 'GET' });
+  }
+
+  async createWorkshop(data: {
+    title: string;
+    summary: string;
+    highlights: string[];
+    location: string;
+    isOnline: boolean;
+    startAt: string;
+    endAt: string;
+    dailyCount: number;
+    isPublished: boolean;
+  }): Promise<AdminWorkshop> {
+    return this.request('/admin/workshops', { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  async updateWorkshop(id: string, data: Partial<{
+    title: string;
+    summary: string;
+    highlights: string[];
+    location: string;
+    isOnline: boolean;
+    startAt: string;
+    endAt: string;
+    dailyCount: number;
+    isPublished: boolean;
+  }>): Promise<AdminWorkshop> {
+    return this.request(`/admin/workshops/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+  }
+
+  async deleteWorkshop(id: string): Promise<{ message: string }> {
+    return this.request(`/admin/workshops/${id}`, { method: 'DELETE' });
   }
 
   // Alerts

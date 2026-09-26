@@ -10,6 +10,7 @@ import { BroadcastEmailPanel } from '@/components/admin/BroadcastEmailPanel';
 import { AuditLogTable } from '@/components/admin/AuditLogTable';
 import { CommunitySubmissionsTable } from '@/components/admin/CommunitySubmissionsTable';
 import { WorkshopRegistrationsTable } from '@/components/admin/WorkshopRegistrationsTable';
+import { ManageWorkshopsPanel } from '@/components/admin/ManageWorkshopsPanel';
 import { toast } from 'sonner';
 
 export default function AdminPage() {
@@ -113,7 +114,18 @@ export default function AdminPage() {
 
             {canCoordinateWorkshop && (
               <TabsContent value="workshop" className="mt-6">
-                <WorkshopRegistrationsTable />
+                <Tabs defaultValue="manage">
+                  <TabsList>
+                    <TabsTrigger value="manage">Manage</TabsTrigger>
+                    <TabsTrigger value="registrations">Registrations</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="manage" className="mt-4">
+                    <ManageWorkshopsPanel />
+                  </TabsContent>
+                  <TabsContent value="registrations" className="mt-4">
+                    <WorkshopRegistrationsTable />
+                  </TabsContent>
+                </Tabs>
               </TabsContent>
             )}
 
