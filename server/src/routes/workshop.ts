@@ -1,12 +1,30 @@
 import { Router } from 'express';
+import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import prisma from '../lib/prisma.js';
 import { sendEmail } from '../lib/emailService.js';
 import { wrapEmailHtml } from '../emails/emailShell.js';
 import { buildRecurringInviteIcs, buildGoogleCalendarLink } from '../lib/calendarInvite.js';
 import { emailLimiter } from '../middleware/rateLimit.js';
+import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
+
+// Best-effort: if the registrant happens to be logged in (an existing
+// CloudOps user filling out the public form), attach their userId so the
+// workshop-cohort leaderboard can find them later. Never blocks
+// registration if the token is missing/expired/invalid -- this route stays
+// public either way.
+async function optionalUserId(req: import('express').Request): Promise<string | undefined> {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ') || !process.env.JWT_SECRET) return undefined;
+  try {
+    const decoded = jwt.verify(authHeader.substring(7), process.env.JWT_SECRET) as { userId: string };
+    return decoded.userId;
+  } catch {
+    return undefined;
+  }
+}
 
 // Fixed event details for the one workshop currently running -- not worth
 // generalizing into a multi-workshop system until there's a second one to
@@ -66,8 +84,10 @@ router.post('/register', emailLimiter, async (req, res) => {
       return res.status(200).json({ message: "You're already registered -- check your inbox for the calendar invite." });
     }
 
+    const userId = await optionalUserId(req);
+
     const registration = await prisma.workshopRegistration.create({
-      data: { name, email, phone: phone || null }
+      data: { name, email, phone: phone || null, userId }
     });
 
     const calendarLink = buildGoogleCalendarLink({
@@ -115,6 +135,75 @@ router.post('/register', emailLimiter, async (req, res) => {
     if (error instanceof z.ZodError) return res.status(400).json({ error: 'Invalid input', details: error.errors });
     console.error('Workshop registration error:', error);
     res.status(500).json({ error: 'Failed to register. Please try again.' });
+  }
+});
+
+function displayNameFor(email: string, fullName: string | null | undefined): string {
+  return fullName?.trim() || email.split('@')[0];
+}
+
+// POST /api/workshop/link -- called once from the cohort page. Backfills
+// the userId on an anonymous registration that matches the caller's own
+// account email -- covers the common case of someone registering from the
+// public page before ever logging in, then later wanting to see the
+// cohort leaderboard from inside the app. Best-effort/idempotent: a no-op
+// if there's no matching row, or it's already linked.
+router.post('/link', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.userId! }, select: { email: true } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const registration = await prisma.workshopRegistration.findUnique({ where: { email: user.email } });
+    if (!registration) return res.json({ linked: false, registered: false });
+    if (registration.userId) return res.json({ linked: true, registered: true });
+
+    await prisma.workshopRegistration.update({ where: { id: registration.id }, data: { userId: req.userId! } });
+    res.json({ linked: true, registered: true });
+  } catch (error) {
+    console.error('Workshop link error:', error);
+    res.status(500).json({ error: 'Failed to link your registration' });
+  }
+});
+
+// GET /api/workshop/cohort -- a leaderboard scoped to just the people who
+// registered for the workshop AND have a CloudOps account (linked via
+// /link above or at registration time if they were already logged in).
+// Lets a workshop batch see how they're doing against each other, same
+// score metric as the site-wide leaderboard.
+router.get('/cohort', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const registrants = await prisma.workshopRegistration.findMany({
+      where: { userId: { not: null } },
+      select: {
+        userId: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            profile: { select: { fullName: true } },
+            gameState: { select: { score: true } },
+          },
+        },
+      },
+    });
+
+    const ranked = registrants
+      .filter((r) => r.user)
+      .map((r) => ({
+        userId: r.user!.id,
+        displayName: displayNameFor(r.user!.email, r.user!.profile?.fullName),
+        score: r.user!.gameState?.score ?? 0,
+        isYou: r.user!.id === req.userId,
+      }))
+      .sort((a, b) => b.score - a.score)
+      .map((r, i) => ({ rank: i + 1, ...r }));
+
+    const yourEntry = ranked.find((r) => r.isYou) ?? null;
+
+    res.json({ cohort: ranked, yourRank: yourEntry, totalLinked: ranked.length });
+  } catch (error) {
+    console.error('Workshop cohort error:', error);
+    res.status(500).json({ error: 'Failed to load workshop cohort' });
   }
 });
 

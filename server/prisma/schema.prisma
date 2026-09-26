@@ -41,6 +41,17 @@ model User {
   tokenVersion Int @default(0) @map("token_version")
 
   isAdmin Boolean @default(false) @map("is_admin")
+  // Scopes what an admin can do beyond the base isAdmin gate. Null means
+  // "full admin" (every existing admin today, preserved as-is by this
+  // default) -- 'moderator' and 'workshop_coordinator' are narrower grants
+  // for people who should only touch one corner of /admin. Checked by
+  // requireAdminRole() in adminAuth.ts, always after adminMiddleware.
+  adminRole String? @map("admin_role")
+
+  // Set the first time this user generates a public "share my profile"
+  // link (see GET /api/profile/share). Null until then -- most users never
+  // opt in, so this stays unset for the overwhelming majority of rows.
+  shareToken String? @unique @map("share_token")
 
   // Referral program -- referralCode is this user's own shareable code
   // (generated at creation for every user, backfilled for pre-existing
@@ -88,6 +99,10 @@ model User {
   referralRewardReceived ReferralReward?  @relation("Referee")
   submissions            CommunitySubmission[] @relation("SubmissionAuthor")
   reviewedSubmissions    CommunitySubmission[] @relation("SubmissionReviewer")
+  submissionHelpfuls     SubmissionHelpful[]
+  submissionComments     SubmissionComment[]
+  scheduledBroadcasts    ScheduledBroadcast[]
+  workshopRegistrations  WorkshopRegistration[]
 
   @@map("users")
 }
@@ -108,15 +123,79 @@ model CommunitySubmission {
   reviewNote   String?   @map("review_note") @db.Text
   reviewedById String?   @map("reviewed_by_id")
   reviewedAt   DateTime? @map("reviewed_at")
+  // Denormalized count of SubmissionHelpful rows, kept in sync in the same
+  // transaction as the vote toggle -- read on every list/detail view, so
+  // it's cheaper than a COUNT() join on every page load.
+  helpfulCount Int       @default(0) @map("helpful_count")
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
   author     User  @relation("SubmissionAuthor", fields: [authorId], references: [id], onDelete: Cascade)
   reviewedBy User? @relation("SubmissionReviewer", fields: [reviewedById], references: [id])
+  helpfuls   SubmissionHelpful[]
+  comments   SubmissionComment[]
 
   @@index([authorId])
   @@index([status])
   @@map("community_submissions")
+}
+
+// One row per user who marked a submission "helpful" -- unique on the pair
+// so a user can only vote once and the toggle is a simple create/delete.
+model SubmissionHelpful {
+  id           String   @id @default(uuid())
+  submissionId String   @map("submission_id")
+  userId       String   @map("user_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  submission CommunitySubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  user       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([submissionId, userId])
+  @@index([submissionId])
+  @@map("submission_helpfuls")
+}
+
+// Lightweight flat comment thread on an approved submission -- no nesting,
+// no edit/delete UI (matches the scope of every other admin/user feature
+// in this app so far: create + list, moderated only via the submission's
+// own approve/reject if things get out of hand).
+model SubmissionComment {
+  id           String   @id @default(uuid())
+  submissionId String   @map("submission_id")
+  authorId     String   @map("author_id")
+  body         String   @db.Text
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  submission CommunitySubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  author     User                @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId])
+  @@map("submission_comments")
+}
+
+// A broadcast queued for a future send time instead of firing immediately.
+// userIds/recentDays mirror the same fields on POST /broadcast-email's
+// request body (not the User model) -- this row is that request, frozen
+// until sendAt, then replayed through the same send path.
+model ScheduledBroadcast {
+  id          String    @id @default(uuid())
+  createdById String    @map("created_by_id")
+  subject     String
+  message     String    @db.Text
+  target      String
+  recentDays  Int?      @map("recent_days")
+  userIds     String[]  @map("user_ids")
+  sendAt      DateTime  @map("send_at")
+  status      String    @default("pending") // 'pending' | 'sent' | 'cancelled' | 'failed'
+  sentAt      DateTime? @map("sent_at")
+  result      Json?     @db.JsonB
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  createdBy User @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([status, sendAt])
+  @@map("scheduled_broadcasts")
 }
 
 // One row per successfully-activated referral (created when the referred
@@ -675,16 +754,24 @@ model Payment {
   @@map("payments")
 }
 
-// Public workshop registrations -- deliberately NOT tied to the User model,
-// since registrants land here from the public marketing site and may not
-// have (or ever create) a CloudOps account.
+// Public workshop registrations -- registrants land here from the public
+// marketing site and may not have (or ever create) a CloudOps account, so
+// userId stays optional. It's set two ways: at registration time if the
+// visitor was logged in, or backfilled on a later login when the account
+// email matches an existing anonymous registration (see auth.ts login
+// handler) -- both are best-effort, not guaranteed, matches for the
+// workshop-cohort leaderboard feature.
 model WorkshopRegistration {
   id        String   @id @default(uuid())
+  userId    String?  @map("user_id")
   name      String
   email     String   @unique
   phone     String?
   createdAt DateTime @default(now()) @map("created_at")
 
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
   @@map("workshop_registrations")
 }
 

@@ -645,6 +645,7 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res) => {
         email: true,
         isVerified: true,
         isAdmin: true,
+        adminRole: true,
         createdAt: true,
         passwordHash: true
       }

@@ -112,13 +112,117 @@ router.get('/:id', async (req: AuthRequest, res) => {
       return res.status(404).json({ error: 'Submission not found' });
     }
 
+    const helpfulByMe = await prisma.submissionHelpful.findUnique({
+      where: { submissionId_userId: { submissionId: submission.id, userId: req.userId! } }
+    });
+
     res.json({
       ...submission,
-      authorName: submission.author.profile?.fullName || submission.author.email.split('@')[0]
+      authorName: submission.author.profile?.fullName || submission.author.email.split('@')[0],
+      helpfulByMe: !!helpfulByMe
     });
   } catch (error) {
     console.error('Get community submission error:', error);
     res.status(500).json({ error: 'Failed to fetch submission' });
+  }
+});
+
+// Only an approved submission can be reacted to/commented on -- a
+// pending/rejected draft has no public audience to react in the first place.
+async function requireApprovedSubmission(id: string, res: any): Promise<{ id: string } | null> {
+  const submission = await prisma.communitySubmission.findUnique({ where: { id }, select: { id: true, status: true } });
+  if (!submission || submission.status !== 'approved') {
+    res.status(404).json({ error: 'Submission not found' });
+    return null;
+  }
+  return submission;
+}
+
+// POST /api/community-submissions/:id/helpful -- toggle the caller's own
+// "helpful" vote. A second call un-votes, matching the usual toggle-button
+// UX (no separate unmark endpoint needed).
+router.post('/:id/helpful', async (req: AuthRequest, res) => {
+  try {
+    const submission = await requireApprovedSubmission(req.params.id, res);
+    if (!submission) return;
+
+    const existing = await prisma.submissionHelpful.findUnique({
+      where: { submissionId_userId: { submissionId: submission.id, userId: req.userId! } }
+    });
+
+    if (existing) {
+      await prisma.$transaction([
+        prisma.submissionHelpful.delete({ where: { id: existing.id } }),
+        prisma.communitySubmission.update({ where: { id: submission.id }, data: { helpfulCount: { decrement: 1 } } })
+      ]);
+      return res.json({ helpfulByMe: false });
+    }
+
+    await prisma.$transaction([
+      prisma.submissionHelpful.create({ data: { submissionId: submission.id, userId: req.userId! } }),
+      prisma.communitySubmission.update({ where: { id: submission.id }, data: { helpfulCount: { increment: 1 } } })
+    ]);
+    res.json({ helpfulByMe: true });
+  } catch (error) {
+    console.error('Toggle submission helpful error:', error);
+    res.status(500).json({ error: 'Failed to update your vote' });
+  }
+});
+
+// GET /api/community-submissions/:id/comments -- flat, oldest-first thread.
+router.get('/:id/comments', async (req: AuthRequest, res) => {
+  try {
+    const submission = await requireApprovedSubmission(req.params.id, res);
+    if (!submission) return;
+
+    const comments = await prisma.submissionComment.findMany({
+      where: { submissionId: submission.id },
+      orderBy: { createdAt: 'asc' },
+      include: { author: { select: { email: true, profile: { select: { fullName: true } } } } }
+    });
+
+    res.json({
+      comments: comments.map((c) => ({
+        id: c.id,
+        body: c.body,
+        createdAt: c.createdAt,
+        authorName: c.author.profile?.fullName || c.author.email.split('@')[0],
+        isMine: c.authorId === req.userId
+      }))
+    });
+  } catch (error) {
+    console.error('Get submission comments error:', error);
+    res.status(500).json({ error: 'Failed to load comments' });
+  }
+});
+
+const commentSchema = z.object({ body: z.string().min(1).max(2000) });
+
+// POST /api/community-submissions/:id/comments -- add a comment. No
+// edit/delete UI, matching the scope of moderation elsewhere in this app
+// (a submission can be un-approved by an admin if a comment gets out of hand).
+router.post('/:id/comments', async (req: AuthRequest, res) => {
+  try {
+    const submission = await requireApprovedSubmission(req.params.id, res);
+    if (!submission) return;
+
+    const { body } = commentSchema.parse(req.body);
+    const comment = await prisma.submissionComment.create({
+      data: { submissionId: submission.id, authorId: req.userId!, body },
+      include: { author: { select: { email: true, profile: { select: { fullName: true } } } } }
+    });
+
+    res.status(201).json({
+      id: comment.id,
+      body: comment.body,
+      createdAt: comment.createdAt,
+      authorName: comment.author.profile?.fullName || comment.author.email.split('@')[0],
+      isMine: true
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) return res.status(400).json({ error: 'Invalid input', details: error.errors });
+    console.error('Create submission comment error:', error);
+    res.status(500).json({ error: 'Failed to post comment' });
   }
 });
 

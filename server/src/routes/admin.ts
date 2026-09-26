@@ -1,24 +1,36 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { authMiddleware, AuthRequest } from '../middleware/auth.js';
-import { adminMiddleware } from '../middleware/adminAuth.js';
+import { adminMiddleware, requireAdminRole, AdminRequest } from '../middleware/adminAuth.js';
 import prisma from '../lib/prisma.js';
 import { sendEmail } from '../lib/emailService.js';
 import { wrapEmailHtml, applyInlineMarkdownBold } from '../emails/emailShell.js';
 import { isActive, ACTIVE_WINDOW_DAYS } from '../lib/activity.js';
+import { toCsv } from '../lib/csv.js';
 
 const router = Router();
 router.use(authMiddleware, adminMiddleware);
 
+// Full-admin-only gate (adminRole === null) -- used on every route that
+// mutates users/plans/broadcasts or reads the audit trail. Scoped roles
+// ('moderator', 'workshop_coordinator') only get the narrower gates below.
+const fullAdminOnly = requireAdminRole();
+
 // GET /api/admin/stats -- dashboard summary
 router.get('/stats', async (_req, res) => {
   try {
-    const [totalUsers, verifiedUsers, proUsers, users, payments] = await Promise.all([
+    // Opportunistic: this is the page every admin lands on, so it's the
+    // most reliable place to catch up on any scheduled broadcast whose
+    // sendAt has passed, without needing a separate cron/worker process.
+    await processDueScheduledBroadcasts();
+
+    const [totalUsers, verifiedUsers, proUsers, users, payments, lastBroadcastLog] = await Promise.all([
       prisma.user.count(),
       prisma.user.count({ where: { isVerified: true } }),
       prisma.user.count({ where: { isPro: true } }),
       prisma.user.findMany({ select: { createdAt: true, gameState: { select: { updatedAt: true } } } }),
       prisma.payment.aggregate({ where: { status: 'completed' }, _sum: { amount: true }, _count: true }),
+      prisma.auditLog.findFirst({ where: { action: 'broadcast_email' }, orderBy: { createdAt: 'desc' } }),
     ]);
 
     const activeUsers = users.filter((u) => isActive(u.gameState?.updatedAt ?? null)).length;
@@ -47,6 +59,14 @@ router.get('/stats', async (_req, res) => {
       totalRevenuePaise: payments._sum.amount ?? 0,
       completedPaymentCount: payments._count,
       signups: Object.entries(signupsByDay).map(([date, count]) => ({ date, count })),
+      lastBroadcast: lastBroadcastLog ? {
+        subject: (lastBroadcastLog.metadata as any)?.subject ?? null,
+        target: (lastBroadcastLog.metadata as any)?.target ?? null,
+        recipientCount: (lastBroadcastLog.metadata as any)?.recipientCount ?? 0,
+        sent: (lastBroadcastLog.metadata as any)?.sent ?? 0,
+        failed: (lastBroadcastLog.metadata as any)?.failed ?? 0,
+        createdAt: lastBroadcastLog.createdAt,
+      } : null,
     });
   } catch (error) {
     console.error('Admin stats error:', error);
@@ -136,7 +156,7 @@ router.get('/analytics', async (_req, res) => {
 });
 
 // GET /api/admin/users -- searchable/filterable user list
-router.get('/users', async (req, res) => {
+router.get('/users', fullAdminOnly, async (req, res) => {
   try {
     const search = (req.query.search as string || '').trim().toLowerCase();
     const planFilter = req.query.plan as string | undefined; // 'pro' | 'free'
@@ -209,8 +229,69 @@ router.get('/users', async (req, res) => {
   }
 });
 
+// GET /api/admin/users/export -- CSV of every user matching the same
+// search/plan/activity filters as the list view above. Registered before
+// /users/:id so Express doesn't match "export" as an :id param.
+router.get('/users/export', fullAdminOnly, async (req, res) => {
+  try {
+    const search = (req.query.search as string || '').trim().toLowerCase();
+    const planFilter = req.query.plan as string | undefined;
+    const activityFilter = req.query.activity as string | undefined;
+
+    const where: any = {};
+    if (planFilter === 'pro') where.isPro = true;
+    if (planFilter === 'free') where.isPro = false;
+
+    const users = await prisma.user.findMany({
+      where,
+      select: {
+        email: true, isVerified: true, isPro: true, planType: true, createdAt: true,
+        profile: { select: { fullName: true, institute: true, occupation: true } },
+        gameState: { select: { updatedAt: true, score: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 5000,
+    });
+
+    let rows = users.map((u) => ({
+      email: u.email,
+      fullName: u.profile?.fullName ?? '',
+      institute: u.profile?.institute ?? '',
+      occupation: u.profile?.occupation ?? '',
+      plan: u.planType,
+      verified: u.isVerified,
+      active: isActive(u.gameState?.updatedAt ?? null),
+      score: u.gameState?.score ?? 0,
+      joinedAt: u.createdAt,
+    }));
+
+    if (search) rows = rows.filter((r) => r.email.toLowerCase().includes(search) || r.fullName.toLowerCase().includes(search));
+    if (activityFilter === 'active') rows = rows.filter((r) => r.active);
+    if (activityFilter === 'inactive') rows = rows.filter((r) => !r.active);
+
+    const csv = toCsv(rows, [
+      { key: 'email', label: 'Email' },
+      { key: 'fullName', label: 'Full Name' },
+      { key: 'institute', label: 'Institute' },
+      { key: 'occupation', label: 'Occupation' },
+      { key: 'plan', label: 'Plan' },
+      { key: 'verified', label: 'Verified' },
+      { key: 'active', label: 'Active' },
+      { key: 'score', label: 'Score' },
+      { key: 'joinedAt', label: 'Joined At' },
+    ]);
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="users-${new Date().toISOString().slice(0, 10)}.csv"`);
+    res.send(csv);
+  } catch (error) {
+    console.error('Admin users export error:', error);
+    res.status(500).json({ error: 'Failed to export users' });
+  }
+});
+
 // GET /api/admin/users/:id -- full detail for one user
-router.get('/users/:id', async (req, res) => {
+router.get('/users/:id', fullAdminOnly, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.params.id },
@@ -250,7 +331,7 @@ const updatePlanSchema = z.object({
 });
 
 // PATCH /api/admin/users/:id/plan -- manually grant/revoke Pro (support tool)
-router.patch('/users/:id/plan', async (req: AuthRequest, res) => {
+router.patch('/users/:id/plan', fullAdminOnly, async (req: AuthRequest, res) => {
   try {
     const { isPro } = updatePlanSchema.parse(req.body);
 
@@ -282,15 +363,68 @@ router.patch('/users/:id/plan', async (req: AuthRequest, res) => {
   }
 });
 
+const updateRoleSchema = z.object({
+  isAdmin: z.boolean(),
+  // null/omitted = full admin access (once isAdmin is true). Only meaningful
+  // when isAdmin is true; ignored (stored but inert) otherwise.
+  adminRole: z.enum(['moderator', 'workshop_coordinator']).nullable().optional(),
+});
+
+// PATCH /api/admin/users/:id/role -- grant/revoke admin access and scope it
+// to a narrower role. Full-admin-only, since letting a moderator hand out
+// admin access (to themselves or anyone else) would be a privilege-escalation
+// hole -- only the unrestricted (adminRole === null) tier can grant it.
+router.patch('/users/:id/role', fullAdminOnly, async (req: AuthRequest, res) => {
+  try {
+    const { isAdmin, adminRole } = updateRoleSchema.parse(req.body);
+
+    const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const updated = await prisma.user.update({
+      where: { id: req.params.id },
+      data: { isAdmin, adminRole: isAdmin ? (adminRole ?? null) : null },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        actorId: req.userId!,
+        action: isAdmin ? 'grant_admin' : 'revoke_admin',
+        targetType: 'user',
+        targetId: updated.id,
+        metadata: { targetEmail: updated.email, adminRole: updated.adminRole },
+      },
+    });
+
+    res.json({
+      message: isAdmin
+        ? `${updated.email} is now an admin${updated.adminRole ? ` (${updated.adminRole})` : ' (full access)'}`
+        : `${updated.email} is no longer an admin`,
+      isAdmin: updated.isAdmin,
+      adminRole: updated.adminRole,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) return res.status(400).json({ error: 'Invalid input', details: error.errors });
+    console.error('Admin role update error:', error);
+    res.status(500).json({ error: 'Failed to update role' });
+  }
+});
+
+const broadcastTargetSchema = z.enum(['all', 'inactive', 'pro', 'free', 'recent', 'custom']);
+
 const broadcastSchema = z.object({
   subject: z.string().min(1).max(200),
   message: z.string().min(1).max(20000),
-  target: z.enum(['all', 'inactive', 'pro', 'free', 'recent', 'custom']),
+  target: broadcastTargetSchema,
   // Only used when target === 'recent' -- "joined within the last N days".
   recentDays: z.number().int().positive().max(365).optional(),
   // Only used when target === 'custom' -- a hand-picked list of user ids
   // from the admin's Users table.
   userIds: z.array(z.string()).min(1).max(5000).optional(),
+  // If present and in the future, this queues a ScheduledBroadcast instead
+  // of sending immediately -- everything else about the request is
+  // identical, just replayed later through the same send path.
+  sendAt: z.string().datetime().optional(),
 });
 
 function wrapBroadcastHtml(message: string): string {
@@ -302,88 +436,165 @@ function wrapBroadcastHtml(message: string): string {
   return wrapEmailHtml(paragraphs);
 }
 
-// POST /api/admin/broadcast-email -- compose + send to a filtered user set.
-// Sends are awaited (in parallel, not sequential) BEFORE responding. A
-// prior version responded immediately and sent in a "fire and forget"
-// background loop after res.json() -- that works on a long-running local
-// server, but Vercel serverless functions can freeze/tear down execution
-// right after the response is flushed, so that background code never
-// reliably finished (often not at all). Sending in parallel keeps total
-// wall-clock time low enough to stay within the function's execution
-// limit at this app's scale (tens of users); a much larger user base
-// would need a real background job queue instead.
-router.post('/broadcast-email', async (req: AuthRequest, res) => {
+type BroadcastTarget = z.infer<typeof broadcastTargetSchema>;
+
+async function resolveRecipients(target: BroadcastTarget, recentDays: number | null | undefined, userIds: string[] | null | undefined) {
+  const users = await prisma.user.findMany({
+    where: { isVerified: true },
+    select: { id: true, email: true, isPro: true, createdAt: true, gameState: { select: { updatedAt: true } } },
+  });
+
+  let recipients = users;
+  if (target === 'pro') recipients = users.filter((u) => u.isPro);
+  if (target === 'free') recipients = users.filter((u) => !u.isPro);
+  if (target === 'inactive') recipients = users.filter((u) => !isActive(u.gameState?.updatedAt ?? null));
+  if (target === 'recent') {
+    const windowMs = (recentDays ?? 7) * 24 * 60 * 60 * 1000;
+    recipients = users.filter((u) => u.createdAt.getTime() > Date.now() - windowMs);
+  }
+  if (target === 'custom') {
+    const idSet = new Set(userIds ?? []);
+    recipients = users.filter((u) => idSet.has(u.id));
+  }
+  return recipients;
+}
+
+// Shared by the immediate-send route below and processDueScheduledBroadcasts
+// -- same send-then-notify-then-audit sequence either way, just triggered
+// at a different time. Sends are awaited in parallel (not sequential, not
+// fire-and-forget) BEFORE returning -- a Vercel serverless function can
+// freeze/tear down execution right after its response is flushed, so
+// background work started after res.json() never reliably finishes.
+async function executeBroadcast(params: {
+  actorId: string;
+  subject: string;
+  message: string;
+  target: BroadcastTarget;
+  recentDays?: number;
+  userIds?: string[];
+}): Promise<{ recipientCount: number; sent: number; failed: number } | { error: string }> {
+  const { actorId, subject, message, target, recentDays, userIds } = params;
+
+  if (target === 'custom' && (!userIds || userIds.length === 0)) {
+    return { error: 'Select at least one user for a custom send' };
+  }
+
+  const recipients = await resolveRecipients(target, recentDays, userIds);
+  if (recipients.length === 0) {
+    return { error: 'No matching recipients for that target' };
+  }
+
+  const html = wrapBroadcastHtml(message);
+  const results = await Promise.allSettled(
+    recipients.map((r) => sendEmail(r.email, subject, html, message))
+  );
+  const sent = results.filter((r) => r.status === 'fulfilled').length;
+  const failed = results.length - sent;
+
+  results.forEach((r, i) => {
+    if (r.status === 'rejected') {
+      console.error(`Broadcast email failed for ${recipients[i].email}:`, r.reason);
+    }
+  });
+
+  console.log(`Broadcast complete: sent=${sent} failed=${failed} target=${target}`);
+
+  await prisma.notification.createMany({
+    data: recipients.map((r) => ({ userId: r.id, title: subject, message }))
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      actorId,
+      action: 'broadcast_email',
+      metadata: {
+        subject, target, recipientCount: recipients.length, sent, failed,
+        ...(target === 'recent' && { recentDays: recentDays ?? 7 }),
+        ...(target === 'custom' && { requestedCount: userIds?.length ?? 0 })
+      }
+    }
+  });
+
+  return { recipientCount: recipients.length, sent, failed };
+}
+
+// Runs whenever GET /stats is loaded (see above) -- picks up any
+// ScheduledBroadcast whose sendAt has passed and replays it through the
+// same executeBroadcast() path as an immediate send, then marks it
+// sent/failed so it's never processed twice.
+async function processDueScheduledBroadcasts(): Promise<void> {
+  const due = await prisma.scheduledBroadcast.findMany({
+    where: { status: 'pending', sendAt: { lte: new Date() } },
+  });
+
+  for (const job of due) {
+    try {
+      const result = await executeBroadcast({
+        actorId: job.createdById,
+        subject: job.subject,
+        message: job.message,
+        target: job.target as BroadcastTarget,
+        recentDays: job.recentDays ?? undefined,
+        userIds: job.userIds.length ? job.userIds : undefined,
+      });
+
+      await prisma.scheduledBroadcast.update({
+        where: { id: job.id },
+        data: {
+          status: 'error' in result ? 'failed' : 'sent',
+          sentAt: new Date(),
+          result: result as any,
+        },
+      });
+    } catch (error) {
+      console.error(`Scheduled broadcast ${job.id} failed:`, error);
+      await prisma.scheduledBroadcast.update({
+        where: { id: job.id },
+        data: { status: 'failed', sentAt: new Date(), result: { error: 'Unexpected error' } },
+      });
+    }
+  }
+}
+
+// POST /api/admin/broadcast-email -- compose + send to a filtered user set
+// now, or queue it for a future sendAt (see ScheduledBroadcast).
+router.post('/broadcast-email', fullAdminOnly, async (req: AuthRequest, res) => {
   try {
-    const { subject, message, target, recentDays, userIds } = broadcastSchema.parse(req.body);
+    const { subject, message, target, recentDays, userIds, sendAt } = broadcastSchema.parse(req.body);
 
     if (target === 'custom' && (!userIds || userIds.length === 0)) {
       return res.status(400).json({ error: 'Select at least one user for a custom send' });
     }
 
-    const users = await prisma.user.findMany({
-      where: { isVerified: true },
-      select: { id: true, email: true, isPro: true, createdAt: true, gameState: { select: { updatedAt: true } } },
-    });
-
-    let recipients = users;
-    if (target === 'pro') recipients = users.filter((u) => u.isPro);
-    if (target === 'free') recipients = users.filter((u) => !u.isPro);
-    if (target === 'inactive') recipients = users.filter((u) => !isActive(u.gameState?.updatedAt ?? null));
-    if (target === 'recent') {
-      const windowMs = (recentDays ?? 7) * 24 * 60 * 60 * 1000;
-      recipients = users.filter((u) => u.createdAt.getTime() > Date.now() - windowMs);
-    }
-    if (target === 'custom') {
-      const idSet = new Set(userIds);
-      recipients = users.filter((u) => idSet.has(u.id));
-    }
-
-    if (recipients.length === 0) {
-      return res.status(400).json({ error: 'No matching recipients for that target' });
-    }
-
-    const html = wrapBroadcastHtml(message);
-    const text = message;
-
-    const results = await Promise.allSettled(
-      recipients.map((r) => sendEmail(r.email, subject, html, text))
-    );
-    const sent = results.filter((r) => r.status === 'fulfilled').length;
-    const failed = results.length - sent;
-
-    results.forEach((r, i) => {
-      if (r.status === 'rejected') {
-        console.error(`Broadcast email failed for ${recipients[i].email}:`, r.reason);
+    if (sendAt) {
+      const sendAtDate = new Date(sendAt);
+      if (sendAtDate.getTime() > Date.now()) {
+        const scheduled = await prisma.scheduledBroadcast.create({
+          data: {
+            createdById: req.userId!,
+            subject, message, target,
+            recentDays: recentDays ?? null,
+            userIds: userIds ?? [],
+            sendAt: sendAtDate,
+          },
+        });
+        return res.status(201).json({
+          message: `Scheduled for ${sendAtDate.toLocaleString()}`,
+          scheduled: true,
+          id: scheduled.id,
+        });
       }
-    });
+      // A sendAt in the past/now is treated the same as no sendAt -- send immediately.
+    }
 
-    console.log(`Broadcast complete: sent=${sent} failed=${failed} target=${target}`);
-
-    // In-app notification alongside the email, so it shows up in the bell
-    // even if the email is slow, filtered to spam, or the address bounces.
-    await prisma.notification.createMany({
-      data: recipients.map((r) => ({ userId: r.id, title: subject, message }))
-    });
-
-    await prisma.auditLog.create({
-      data: {
-        actorId: req.userId!,
-        action: 'broadcast_email',
-        metadata: {
-          subject, target, recipientCount: recipients.length, sent, failed,
-          ...(target === 'recent' && { recentDays: recentDays ?? 7 }),
-          ...(target === 'custom' && { requestedCount: userIds?.length ?? 0 })
-        }
-      }
-    });
+    const result = await executeBroadcast({ actorId: req.userId!, subject, message, target, recentDays, userIds });
+    if ('error' in result) return res.status(400).json({ error: result.error });
 
     res.json({
-      message: failed === 0
-        ? `Sent to all ${sent} recipient(s)`
-        : `Sent to ${sent} of ${recipients.length} recipient(s) -- ${failed} failed`,
-      recipientCount: recipients.length,
-      sent,
-      failed,
+      message: result.failed === 0
+        ? `Sent to all ${result.sent} recipient(s)`
+        : `Sent to ${result.sent} of ${result.recipientCount} recipient(s) -- ${result.failed} failed`,
+      ...result,
     });
   } catch (error) {
     if (error instanceof z.ZodError) return res.status(400).json({ error: 'Invalid input', details: error.errors });
@@ -392,10 +603,40 @@ router.post('/broadcast-email', async (req: AuthRequest, res) => {
   }
 });
 
+// GET /api/admin/scheduled-broadcasts -- pending + recently-processed queue.
+router.get('/scheduled-broadcasts', fullAdminOnly, async (_req, res) => {
+  try {
+    await processDueScheduledBroadcasts();
+    const jobs = await prisma.scheduledBroadcast.findMany({
+      orderBy: { sendAt: 'desc' },
+      take: 50,
+    });
+    res.json({ jobs });
+  } catch (error) {
+    console.error('Admin scheduled broadcasts list error:', error);
+    res.status(500).json({ error: 'Failed to load scheduled broadcasts' });
+  }
+});
+
+// DELETE /api/admin/scheduled-broadcasts/:id -- cancel a still-pending send.
+router.delete('/scheduled-broadcasts/:id', fullAdminOnly, async (req, res) => {
+  try {
+    const job = await prisma.scheduledBroadcast.findUnique({ where: { id: req.params.id } });
+    if (!job) return res.status(404).json({ error: 'Scheduled broadcast not found' });
+    if (job.status !== 'pending') return res.status(400).json({ error: `Already ${job.status}, can't cancel` });
+
+    await prisma.scheduledBroadcast.update({ where: { id: req.params.id }, data: { status: 'cancelled' } });
+    res.json({ message: 'Scheduled broadcast cancelled' });
+  } catch (error) {
+    console.error('Admin cancel scheduled broadcast error:', error);
+    res.status(500).json({ error: 'Failed to cancel scheduled broadcast' });
+  }
+});
+
 // GET /api/admin/audit-log -- who did what, when. Covers admin-only
 // mutating actions (grant/revoke Pro, broadcast sends); page in from the
 // most recent.
-router.get('/audit-log', async (req, res) => {
+router.get('/audit-log', fullAdminOnly, async (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string, 10) || 25));
@@ -430,10 +671,12 @@ router.get('/audit-log', async (req, res) => {
   }
 });
 
+const moderatorOnly = requireAdminRole('moderator');
+
 // GET /api/admin/submissions -- moderation queue for user-submitted
 // community content (documentation/research papers/blogs), default filter
 // 'pending' since that's what actually needs admin attention.
-router.get('/submissions', async (req, res) => {
+router.get('/submissions', moderatorOnly, async (req, res) => {
   try {
     const status = (req.query.status as string) || 'pending';
     const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
@@ -462,6 +705,49 @@ router.get('/submissions', async (req, res) => {
   }
 });
 
+// GET /api/admin/submissions/export -- CSV of submissions, filterable by
+// status (defaults to every status, not just pending, since this is for
+// record-keeping rather than the moderation queue itself).
+router.get('/submissions/export', moderatorOnly, async (req, res) => {
+  try {
+    const status = req.query.status as string | undefined;
+    const submissions = await prisma.communitySubmission.findMany({
+      where: status ? { status } : undefined,
+      include: { author: { select: { email: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 5000,
+    });
+
+    const csv = toCsv(
+      submissions.map((s) => ({
+        title: s.title,
+        type: s.type,
+        status: s.status,
+        authorEmail: s.author.email,
+        helpfulCount: s.helpfulCount,
+        createdAt: s.createdAt,
+        reviewedAt: s.reviewedAt,
+      })),
+      [
+        { key: 'title', label: 'Title' },
+        { key: 'type', label: 'Type' },
+        { key: 'status', label: 'Status' },
+        { key: 'authorEmail', label: 'Author Email' },
+        { key: 'helpfulCount', label: 'Helpful Votes' },
+        { key: 'createdAt', label: 'Submitted At' },
+        { key: 'reviewedAt', label: 'Reviewed At' },
+      ]
+    );
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="submissions-${new Date().toISOString().slice(0, 10)}.csv"`);
+    res.send(csv);
+  } catch (error) {
+    console.error('Admin submissions export error:', error);
+    res.status(500).json({ error: 'Failed to export submissions' });
+  }
+});
+
 const reviewSubmissionSchema = z.object({
   status: z.enum(['approved', 'rejected']),
   reviewNote: z.string().max(2000).optional()
@@ -471,7 +757,7 @@ const reviewSubmissionSchema = z.object({
 // approval, broadcasts a Notification to every verified user -- the same
 // bulk-notify shape as broadcast-email below -- and writes an AuditLog
 // entry either way, matching every other admin mutating action in this file.
-router.patch('/submissions/:id', async (req: AuthRequest, res) => {
+router.patch('/submissions/:id', moderatorOnly, async (req: AuthRequest, res) => {
   try {
     const { status, reviewNote } = reviewSubmissionSchema.parse(req.body);
 
@@ -517,6 +803,71 @@ router.patch('/submissions/:id', async (req: AuthRequest, res) => {
     if (error instanceof z.ZodError) return res.status(400).json({ error: 'Invalid input', details: error.errors });
     console.error('Admin review submission error:', error);
     res.status(500).json({ error: 'Failed to review submission' });
+  }
+});
+
+const workshopCoordinatorOnly = requireAdminRole('workshop_coordinator');
+
+// GET /api/admin/workshop-registrations -- who signed up for the workshop,
+// newest first. There's no admin-facing view of this at all today (the
+// public /workshop page writes rows nobody in the admin panel can see).
+router.get('/workshop-registrations', workshopCoordinatorOnly, async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string, 10) || 50));
+
+    const [registrations, total, linkedCount] = await Promise.all([
+      prisma.workshopRegistration.findMany({
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.workshopRegistration.count(),
+      prisma.workshopRegistration.count({ where: { userId: { not: null } } }),
+    ]);
+
+    res.json({
+      registrations,
+      total,
+      linkedCount,
+      page,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    });
+  } catch (error) {
+    console.error('Admin workshop registrations error:', error);
+    res.status(500).json({ error: 'Failed to load workshop registrations' });
+  }
+});
+
+// GET /api/admin/workshop-registrations/export -- CSV of every registrant,
+// for coordinating the actual workshop (invites, attendance, follow-up).
+router.get('/workshop-registrations/export', workshopCoordinatorOnly, async (_req, res) => {
+  try {
+    const registrations = await prisma.workshopRegistration.findMany({ orderBy: { createdAt: 'desc' } });
+
+    const csv = toCsv(
+      registrations.map((r) => ({
+        name: r.name,
+        email: r.email,
+        phone: r.phone ?? '',
+        hasAccount: !!r.userId,
+        registeredAt: r.createdAt,
+      })),
+      [
+        { key: 'name', label: 'Name' },
+        { key: 'email', label: 'Email' },
+        { key: 'phone', label: 'Phone' },
+        { key: 'hasAccount', label: 'Has CloudOps Account' },
+        { key: 'registeredAt', label: 'Registered At' },
+      ]
+    );
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="workshop-registrations-${new Date().toISOString().slice(0, 10)}.csv"`);
+    res.send(csv);
+  } catch (error) {
+    console.error('Admin workshop registrations export error:', error);
+    res.status(500).json({ error: 'Failed to export workshop registrations' });
   }
 });
 

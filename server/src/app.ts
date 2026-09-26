@@ -28,6 +28,8 @@ import certificateRoutes from './routes/certificates.js';
 import referralRoutes from './routes/referral.js';
 import communitySubmissionRoutes from './routes/communitySubmissions.js';
 import workshopRoutes from './routes/workshop.js';
+import publicProfileRoutes from './routes/publicProfile.js';
+import searchRoutes from './routes/search.js';
 
 const app = express();
 
@@ -115,6 +117,8 @@ app.use('/api/certificates', certificateRoutes);
 app.use('/api/referral', referralRoutes);
 app.use('/api/community-submissions', communitySubmissionRoutes);
 app.use('/api/workshop', workshopRoutes);
+app.use('/api/public-profile', publicProfileRoutes);
+app.use('/api/search', searchRoutes);
 
 // A no-op if SENTRY_DSN isn't set -- must be registered after all routes
 // but before the app's own final error handler below, per Sentry's setup

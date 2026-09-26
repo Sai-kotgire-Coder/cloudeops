@@ -1,10 +1,43 @@
 import { Router } from 'express';
+import crypto from 'crypto';
 import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 import prisma from '../lib/prisma.js';
 import { ensureGameState } from '../lib/gameState.js';
 
 const router = Router();
 router.use(authMiddleware);
+
+// POST /api/profile/share -- generate (once) and return this user's public
+// "share my profile" link token. Idempotent: a user who already has one
+// just gets it back, so re-clicking "Share" never invalidates an already
+// shared link.
+router.post('/share', async (req: AuthRequest, res) => {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.userId! }, select: { shareToken: true } });
+    const shareToken = user?.shareToken || crypto.randomBytes(8).toString('hex');
+
+    if (!user?.shareToken) {
+      await prisma.user.update({ where: { id: req.userId! }, data: { shareToken } });
+    }
+
+    res.json({ shareToken });
+  } catch (error) {
+    console.error('Create profile share link error:', error);
+    res.status(500).json({ error: 'Failed to create share link' });
+  }
+});
+
+// DELETE /api/profile/share -- revoke the public link (e.g. shared it by
+// mistake, or wants it gone). A later "Share" click issues a fresh token.
+router.delete('/share', async (req: AuthRequest, res) => {
+  try {
+    await prisma.user.update({ where: { id: req.userId! }, data: { shareToken: null } });
+    res.json({ message: 'Share link revoked' });
+  } catch (error) {
+    console.error('Revoke profile share link error:', error);
+    res.status(500).json({ error: 'Failed to revoke share link' });
+  }
+});
 
 const REFERRAL_BONUS_POINTS = 50;
 
