@@ -261,9 +261,15 @@
    element still keeps its layout height, so the (tall, scrollable) app
    behind the dialog was still contributing to the page's total height and
    forcing a second, blank printed page. Collapsing html/body to zero
-   height with overflow hidden removes that phantom height entirely, and
-   the certificate (pulled out of flow via position:fixed) renders on top,
-   centered, as the only content on the one page @page below defines. */
+   height with overflow hidden removes that phantom height entirely.
+
+   The certificate itself must be pulled out of flow with position:absolute,
+   NOT position:fixed -- per the CSS Paged Media spec, a `fixed` box is
+   deliberately repeated on EVERY printed page (that's how running
+   headers/footers work), so if pagination ever produces a second page for
+   any reason, a `fixed` certificate prints again, identically, on it too.
+   `absolute` has no such repeat behavior: it's placed once, against the
+   page box (the initial containing block), and only ever appears once. */
 @media print {
   @page {
     size: landscape;
@@ -282,7 +288,7 @@
     visibility: visible;
   }
   #certificate-print-area {
-    position: fixed;
+    position: absolute;
     inset: 0;
     width: 100vw;
     height: 100vh;
@@ -290,5 +296,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 }

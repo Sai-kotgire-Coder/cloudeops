@@ -7,6 +7,7 @@ import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { apiClient } from '@/lib/apiClient';
+import { printElementInNewWindow } from '@/lib/printIsolated';
 import { toast } from 'sonner';
 
 const MODULE_LABELS: Record<string, string> = {
@@ -165,8 +166,9 @@ export default function CertificatesPage() {
               Completion" heading below -- kept visually hidden, not removed. */}
           <DialogTitle className="sr-only">Certificate of Completion</DialogTitle>
           {openCert && (
-            <div id="certificate-print-area">
+            <div>
               <div
+                id="certificate-print-area"
                 className="relative mx-auto w-full aspect-[1.414/1] p-3 sm:p-4"
                 style={{ background: '#f6f1e4', color: '#1f2937' }}
               >
@@ -174,7 +176,7 @@ export default function CertificatesPage() {
                 <div className="absolute inset-3 sm:inset-4 border-[3px]" style={{ borderColor: '#b8862f' }} />
                 <div className="absolute inset-[18px] sm:inset-6 border" style={{ borderColor: '#b8862f' }} />
 
-                <div className="relative h-full flex flex-col items-center justify-between text-center px-6 sm:px-14 py-6 sm:py-10">
+                <div className="relative h-full flex flex-col items-center justify-between text-center px-6 sm:px-14 pt-6 sm:pt-10 pb-8 sm:pb-12">
                   <div className="flex flex-col items-center">
                     <p
                       className="text-[10px] sm:text-xs uppercase tracking-[0.4em]"
@@ -246,8 +248,13 @@ export default function CertificatesPage() {
                 </div>
               </div>
 
-              <div className="mt-4 flex justify-center print:hidden">
-                <Button size="sm" variant="outline" className="gap-2" onClick={() => window.print()}>
+              <div className="mt-4 flex justify-center">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => printElementInNewWindow('certificate-print-area', `Certificate - ${MODULE_LABELS[openCert.module] ?? openCert.module}`)}
+                >
                   <Printer className="w-4 h-4" />
                   Print / Save as PDF
                 </Button>
