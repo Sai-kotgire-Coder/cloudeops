@@ -71,7 +71,7 @@ router.get('/', async (req: AuthRequest, res) => {
         where,
         select: {
           id: true, title: true, type: true, summary: true, externalUrl: true,
-          createdAt: true, reviewedAt: true,
+          createdAt: true, reviewedAt: true, helpfulCount: true,
           author: { select: { email: true, profile: { select: { fullName: true } } } }
         },
         orderBy: { reviewedAt: 'desc' },

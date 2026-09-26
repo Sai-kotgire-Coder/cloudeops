@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Award, GraduationCap, Loader2, Printer } from 'lucide-react';
+import { Award, GraduationCap, Loader2, Printer, Share2, Check, Link2Off } from 'lucide-react';
 import { useProgressStore } from '@/store/progressStore';
 import { useProfileStore } from '@/store/profileStore';
 import { useAuthStore } from '@/store/authStore';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { apiClient } from '@/lib/apiClient';
+import { toast } from 'sonner';
 
 const MODULE_LABELS: Record<string, string> = {
   terraform: 'Terraform Lab',
@@ -26,23 +28,75 @@ export default function CertificatesPage() {
   const email = useAuthStore((s) => s.user?.email);
   const [loading, setLoading] = useState(true);
   const [openCode, setOpenCode] = useState<string | null>(null);
+  const [shareToken, setShareToken] = useState<string | null>(null);
+  const [sharing, setSharing] = useState(false);
+  const [justCopied, setJustCopied] = useState(false);
 
   useEffect(() => {
     Promise.all([fetchSummary(), fetchCertificates()]).finally(() => setLoading(false));
   }, [fetchSummary, fetchCertificates]);
+
+  const shareUrl = shareToken ? `${window.location.origin}/u/${shareToken}` : null;
+
+  const handleShare = async () => {
+    setSharing(true);
+    try {
+      const { shareToken: token } = await apiClient.createProfileShareLink();
+      setShareToken(token);
+      await navigator.clipboard.writeText(`${window.location.origin}/u/${token}`);
+      setJustCopied(true);
+      toast.success('Link copied — anyone with it can view your progress and certificates.');
+      setTimeout(() => setJustCopied(false), 2000);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to create share link');
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  const handleRevoke = async () => {
+    try {
+      await apiClient.revokeProfileShareLink();
+      setShareToken(null);
+      toast.success('Share link revoked');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to revoke share link');
+    }
+  };
 
   const openCert = certificates.find((c) => c.code === openCode);
   const recipientName = fullName?.trim() || email?.split('@')[0] || 'Simulator User';
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
-      <header className="h-14 border-b border-border bg-card flex items-center px-4 sm:px-6 gap-3 shrink-0">
-        <GraduationCap className="w-6 h-6 text-primary" />
-        <div>
-          <h1 className="font-bold text-lg sm:text-xl">Progress & Certificates</h1>
-          <p className="text-xs text-muted-foreground hidden sm:block">Track module progress and view earned certificates</p>
+      <header className="h-14 border-b border-border bg-card flex items-center justify-between px-4 sm:px-6 gap-3 shrink-0">
+        <div className="flex items-center gap-3 min-w-0">
+          <GraduationCap className="w-6 h-6 text-primary shrink-0" />
+          <div className="min-w-0">
+            <h1 className="font-bold text-lg sm:text-xl">Progress & Certificates</h1>
+            <p className="text-xs text-muted-foreground hidden sm:block">Track module progress and view earned certificates</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {shareToken ? (
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={handleRevoke}>
+              <Link2Off className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Revoke share link</span>
+            </Button>
+          ) : (
+            <Button size="sm" variant="outline" className="gap-1.5" disabled={sharing} onClick={handleShare}>
+              {sharing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : justCopied ? <Check className="w-3.5 h-3.5" /> : <Share2 className="w-3.5 h-3.5" />}
+              <span className="hidden sm:inline">{justCopied ? 'Copied!' : 'Share my profile'}</span>
+            </Button>
+          )}
         </div>
       </header>
+      {shareUrl && (
+        <div className="px-4 sm:px-6 py-2 bg-primary/5 border-b border-border text-xs flex items-center gap-2 shrink-0">
+          <span className="text-muted-foreground">Public link:</span>
+          <code className="font-mono truncate">{shareUrl}</code>
+        </div>
+      )}
 
       <div className="flex-1 overflow-auto p-3 sm:p-4 md:p-6">
         <div className="max-w-3xl mx-auto space-y-8">

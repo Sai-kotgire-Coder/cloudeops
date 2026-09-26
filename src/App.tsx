@@ -46,6 +46,7 @@ import CommunityLibraryPage from "./pages/CommunityLibraryPage.tsx";
 import SubmitContentPage from "./pages/SubmitContentPage.tsx";
 import MySubmissionsPage from "./pages/MySubmissionsPage.tsx";
 import WorkshopRegistrationPage from "./pages/WorkshopRegistrationPage.tsx";
+import PublicProfilePage from "./pages/PublicProfilePage.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 import { LearningSidebar } from "@/components/learning/LearningSidebar";
@@ -60,6 +61,7 @@ import { ProgressWatcher } from "@/components/progress/ProgressWatcher";
 import { OnboardingGate } from "@/components/account/OnboardingGate";
 import { AdminRoute } from "@/components/auth/AdminRoute";
 import { SessionGuard } from "@/components/auth/SessionGuard";
+import { GlobalSearch } from "@/components/search/GlobalSearch";
 
 const queryClient = new QueryClient();
 
@@ -113,6 +115,7 @@ const App = () => {
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/auth/github/callback" element={<GitHubCallbackPage />} />
             <Route path="/workshop" element={<WorkshopRegistrationPage />} />
+            <Route path="/u/:token" element={<PublicProfilePage />} />
 
             {/* Protected routes */}
             <Route
@@ -121,6 +124,7 @@ const App = () => {
                 <ProtectedRoute>
                   <SessionGuard />
                   <OnboardingGate>
+                    <GlobalSearch />
                     <LearningSidebar />
                     <GuidanceBanner />
                     <OnboardingOverlay />

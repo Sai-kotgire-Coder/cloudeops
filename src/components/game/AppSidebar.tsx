@@ -1,4 +1,4 @@
-import { Zap, LogOut, User, Rocket, ShieldAlert, Trophy, Award, Gift, BookOpen } from 'lucide-react';
+import { Zap, LogOut, User, Rocket, ShieldAlert, Trophy, Award, Gift, BookOpen, Search } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
@@ -92,6 +92,19 @@ export function AppSidebar() {
         )}
       </SidebarHeader>
       <SidebarContent>
+        <div className="px-2 pt-2">
+          <Button
+            variant="outline"
+            className={collapsed ? 'w-full h-8 px-0' : 'w-full justify-between h-8 px-2 text-muted-foreground'}
+            onClick={() => window.dispatchEvent(new CustomEvent('open-global-search'))}
+          >
+            <span className="flex items-center gap-2">
+              <Search className="h-3.5 w-3.5" />
+              {!collapsed && <span className="text-xs">Search</span>}
+            </span>
+            {!collapsed && <kbd className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded">Ctrl K</kbd>}
+          </Button>
+        </div>
         <SidebarGroup>
           <SidebarGroupLabel>Navigation</SidebarGroupLabel>
           <SidebarGroupContent>

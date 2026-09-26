@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Trophy, Loader2, Medal } from 'lucide-react';
+import { Trophy, Loader2, Medal, Users2 } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { apiClient } from '@/lib/apiClient';
 import { toast } from 'sonner';
 
@@ -14,20 +15,37 @@ interface LeaderboardEntry {
 const MEDAL_COLORS = ['text-amber-400', 'text-gray-400', 'text-amber-700'];
 
 export default function LeaderboardPage() {
+  const [view, setView] = useState<'all' | 'cohort'>('all');
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [yourRank, setYourRank] = useState<LeaderboardEntry | null>(null);
   const [loading, setLoading] = useState(true);
+  const [cohortTotal, setCohortTotal] = useState<number | null>(null);
 
   useEffect(() => {
-    apiClient
-      .getLeaderboard()
+    // Best-effort: backfills the link between this account and a workshop
+    // registration made with the same email before/without logging in.
+    // Silently ignored either way -- the cohort tab just shows fewer/no
+    // entries if there's nothing to link.
+    apiClient.linkWorkshopRegistration().catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    setLoading(true);
+    const request = view === 'all' ? apiClient.getLeaderboard() : apiClient.getWorkshopCohort();
+    request
       .then((data) => {
-        setEntries(data.leaderboard);
-        setYourRank(data.yourRank);
+        if (view === 'all') {
+          setEntries(data.leaderboard);
+          setYourRank(data.yourRank);
+        } else {
+          setEntries(data.cohort);
+          setYourRank(data.yourRank);
+          setCohortTotal(data.totalLinked);
+        }
       })
       .catch((err) => toast.error(err.message || 'Failed to load leaderboard'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [view]);
 
   const youAreInTop = entries.some((e) => e.isYou);
 
@@ -43,6 +61,21 @@ export default function LeaderboardPage() {
 
       <div className="flex-1 overflow-auto p-3 sm:p-4 md:p-6">
         <div className="max-w-2xl mx-auto space-y-4">
+          <Tabs value={view} onValueChange={(v) => setView(v as 'all' | 'cohort')}>
+            <TabsList>
+              <TabsTrigger value="all" className="gap-1.5"><Trophy className="w-3.5 h-3.5" /> All users</TabsTrigger>
+              <TabsTrigger value="cohort" className="gap-1.5"><Users2 className="w-3.5 h-3.5" /> Workshop cohort</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {view === 'cohort' && !loading && (
+            <p className="text-xs text-muted-foreground">
+              {cohortTotal === 0
+                ? "No workshop registrants with a CloudOps account yet — register with the same email you signed up with."
+                : `${cohortTotal} workshop registrant${cohortTotal === 1 ? '' : 's'} with a CloudOps account.`}
+            </p>
+          )}
+
           {loading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Library, FileText, FlaskConical, Newspaper, Loader2, ExternalLink, Plus } from 'lucide-react';
+import { Library, FileText, FlaskConical, Newspaper, Loader2, ExternalLink, Plus, ThumbsUp, MessageSquare, Send } from 'lucide-react';
 import { apiClient } from '@/lib/apiClient';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { DocsMarkdown } from '@/components/docs/DocsMarkdown';
 import { DocsSidebar } from '@/components/docs/DocsSidebar';
@@ -18,6 +19,16 @@ interface Submission {
   externalUrl: string | null;
   authorName: string;
   reviewedAt: string;
+  helpfulCount: number;
+  helpfulByMe?: boolean;
+}
+
+interface Comment {
+  id: string;
+  body: string;
+  createdAt: string;
+  authorName: string;
+  isMine: boolean;
 }
 
 const TYPE_META: Record<string, { label: string; icon: typeof FileText }> = {
@@ -32,6 +43,11 @@ export default function CommunityLibraryPage() {
   const [filter, setFilter] = useState<string | undefined>(undefined);
   const [selected, setSelected] = useState<Submission | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [newComment, setNewComment] = useState('');
+  const [postingComment, setPostingComment] = useState(false);
+  const [togglingHelpful, setTogglingHelpful] = useState(false);
 
   const load = (type?: string) => {
     setLoading(true);
@@ -46,13 +62,51 @@ export default function CommunityLibraryPage() {
 
   const openDetail = async (id: string) => {
     setDetailLoading(true);
+    setComments([]);
     try {
       const full = await apiClient.getCommunitySubmission(id);
       setSelected(full);
+      setCommentsLoading(true);
+      apiClient
+        .getSubmissionComments(id)
+        .then((data) => setComments(data.comments))
+        .catch(() => {})
+        .finally(() => setCommentsLoading(false));
     } catch (err: any) {
       toast.error(err.message || 'Failed to load submission');
     } finally {
       setDetailLoading(false);
+    }
+  };
+
+  const handleToggleHelpful = async () => {
+    if (!selected) return;
+    setTogglingHelpful(true);
+    try {
+      const result = await apiClient.toggleSubmissionHelpful(selected.id);
+      setSelected({
+        ...selected,
+        helpfulByMe: result.helpfulByMe,
+        helpfulCount: selected.helpfulCount + (result.helpfulByMe ? 1 : -1),
+      });
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update your vote');
+    } finally {
+      setTogglingHelpful(false);
+    }
+  };
+
+  const handlePostComment = async () => {
+    if (!selected || !newComment.trim()) return;
+    setPostingComment(true);
+    try {
+      const comment = await apiClient.postSubmissionComment(selected.id, newComment.trim());
+      setComments((prev) => [...prev, comment]);
+      setNewComment('');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to post comment');
+    } finally {
+      setPostingComment(false);
     }
   };
 
@@ -118,8 +172,13 @@ export default function CommunityLibraryPage() {
                         </div>
                         <h3 className="font-semibold truncate">{s.title}</h3>
                         <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{s.summary}</p>
-                        <p className="text-xs text-muted-foreground mt-2">
-                          by {s.authorName} · {new Date(s.reviewedAt).toLocaleDateString()}
+                        <p className="text-xs text-muted-foreground mt-2 flex items-center gap-3">
+                          <span>by {s.authorName} · {new Date(s.reviewedAt).toLocaleDateString()}</span>
+                          {s.helpfulCount > 0 && (
+                            <span className="flex items-center gap-1">
+                              <ThumbsUp className="w-3 h-3" /> {s.helpfulCount}
+                            </span>
+                          )}
                         </p>
                       </div>
                     </div>
@@ -170,6 +229,56 @@ export default function CommunityLibraryPage() {
                 </a>
               )}
               <DocsMarkdown content={selected.content} />
+
+              <div className="mt-6 pt-4 border-t border-border">
+                <Button
+                  size="sm"
+                  variant={selected.helpfulByMe ? 'default' : 'outline'}
+                  className="gap-1.5"
+                  disabled={togglingHelpful}
+                  onClick={handleToggleHelpful}
+                >
+                  <ThumbsUp className="w-3.5 h-3.5" />
+                  {selected.helpfulByMe ? 'Marked helpful' : 'Helpful'}
+                  {selected.helpfulCount > 0 && <span className="tabular-nums">({selected.helpfulCount})</span>}
+                </Button>
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-border">
+                <p className="text-sm font-semibold flex items-center gap-1.5 mb-3">
+                  <MessageSquare className="w-4 h-4 text-muted-foreground" />
+                  Comments {comments.length > 0 && `(${comments.length})`}
+                </p>
+                {commentsLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                ) : (
+                  <div className="space-y-3 mb-4">
+                    {comments.length === 0 && (
+                      <p className="text-xs text-muted-foreground">No comments yet — be the first to ask a question or share a thought.</p>
+                    )}
+                    {comments.map((c) => (
+                      <div key={c.id} className="rounded-lg bg-muted/50 px-3 py-2">
+                        <p className="text-sm whitespace-pre-line">{c.body}</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {c.authorName}{c.isMine && ' (you)'} · {new Date(c.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <Textarea
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    placeholder="Add a comment..."
+                    rows={2}
+                    className="flex-1"
+                  />
+                  <Button size="icon" disabled={postingComment || !newComment.trim()} onClick={handlePostComment} className="shrink-0">
+                    {postingComment ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
         </DialogContent>
