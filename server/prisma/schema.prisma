@@ -525,8 +525,17 @@ model TerraformWorkspace {
   userId        String   @map("user_id")
   resourceCount Int      @default(0) @map("resource_count")
   appliedCount  Int      @default(0) @map("applied_count")
-  config        Json?    @db.JsonB // authored resource blocks (the desired state)
-  state         Json?    @db.JsonB // last-applied resource blocks (the tfstate)
+  // Keyed by workspace ('dev' | 'prod') as of the multi-workspace feature --
+  // { dev: TerraformResource[], prod: TerraformResource[] }. Older rows
+  // persisted before that shipped still hold a flat array; the frontend
+  // store's hydrate() migrates that legacy shape into { dev: [...], prod: [] }
+  // on load rather than this column needing a data migration.
+  config        Json?    @db.JsonB // authored resource blocks (the desired state), per workspace
+  state         Json?    @db.JsonB // last-applied resource blocks (the tfstate), per workspace
+  // Named values resources can reference (as a "var.<name>" string attr)
+  // instead of a hardcoded literal -- shared across both workspaces, same
+  // as referencing the same variables.tf from either environment.
+  variables     Json?    @db.JsonB
   history       Json?    @db.JsonB // array of apply/destroy/drift events
   updatedAt     DateTime @updatedAt @map("updated_at")
 
@@ -572,6 +581,11 @@ model VaultWorkspace {
   secrets      Json?    @db.JsonB // KV secrets, each with a version history
   policies     Json?    @db.JsonB // HCL access-control policies
   tokens       Json?    @db.JsonB // tokens with attached policy ids
+  // Short-lived, auto-expiring credentials generated on demand from a
+  // dynamic (e.g. 'database') engine -- distinct from `secrets`, which are
+  // static KV values someone wrote. Expiry is computed client-side from
+  // createdAt + ttlSeconds; `revoked` marks an early manual revoke.
+  leases       Json?    @db.JsonB
   history      Json?    @db.JsonB // array of write/access-allowed/access-denied events
   updatedAt    DateTime @updatedAt @map("updated_at")
 

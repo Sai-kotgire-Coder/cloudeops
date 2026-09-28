@@ -79,6 +79,22 @@ export interface WorkspaceEvent {
   timestamp: number;
 }
 
+// A short-lived, auto-expiring credential generated on demand from a
+// 'database' (or similarly dynamic) engine -- the actual reason companies
+// use Vault over a static secrets file. Unlike a KV Secret, nobody writes
+// its value; Vault (here, the simulator) generates it, and it's only ever
+// valid until createdAt + ttlSeconds, or until explicitly revoked early.
+export interface Lease {
+  id: string;
+  engineId: string;
+  role: string; // the named role a real dynamic engine issues credentials against, e.g. "readonly"
+  username: string;
+  password: string;
+  createdAt: number;
+  ttlSeconds: number;
+  revoked: boolean;
+}
+
 function pathMatches(pattern: string, path: string): boolean {
   if (pattern === path) return true;
   if (pattern.endsWith('/*')) {
@@ -101,6 +117,7 @@ interface VaultState {
   secrets: Secret[];
   policies: Policy[];
   tokens: VaultToken[];
+  leases: Lease[];
   history: WorkspaceEvent[];
   accessCount: number;
   lastAccess: AccessAttempt | null;
@@ -115,18 +132,21 @@ interface VaultState {
   addToken: (name: string, policyIds: string[]) => void;
   removeToken: (id: string) => void;
   attemptAccess: (tokenId: string, secretId: string) => void;
+  generateLease: (engineId: string, role: string, ttlSeconds: number) => void;
+  revokeLease: (id: string) => void;
   hydrate: (data: {
     engines?: SecretsEngine[];
     secrets?: Secret[];
     policies?: Policy[];
     tokens?: VaultToken[];
+    leases?: Lease[];
     history?: WorkspaceEvent[];
     accessCount?: number;
   }) => void;
 }
 
 function syncToBackend(get: () => VaultState) {
-  const { engines, secrets, policies, tokens, history, accessCount } = get();
+  const { engines, secrets, policies, tokens, leases, history, accessCount } = get();
   apiClient
     .updateVaultWorkspace({
       secretCount: secrets.length,
@@ -135,6 +155,7 @@ function syncToBackend(get: () => VaultState) {
       secrets,
       policies,
       tokens,
+      leases,
       history,
     })
     .catch((err) => console.error('Failed to sync vault workspace:', err));
@@ -145,6 +166,7 @@ export const useVaultStore = create<VaultState>()((set, get) => ({
   secrets: [],
   policies: [],
   tokens: [],
+  leases: [],
   history: [],
   accessCount: 0,
   lastAccess: null,
@@ -312,12 +334,57 @@ export const useVaultStore = create<VaultState>()((set, get) => ({
     syncToBackend(get);
   },
 
+  generateLease: (engineId, role, ttlSeconds) => {
+    const engine = get().engines.find((e) => e.id === engineId);
+    if (!engine) return;
+    const roleName = role.trim() || 'readonly';
+    const suffix = crypto.randomUUID().slice(0, 8);
+    const lease: Lease = {
+      id: crypto.randomUUID(),
+      engineId,
+      role: roleName,
+      username: `v-${roleName}-${suffix}`,
+      password: crypto.randomUUID().replace(/-/g, '').slice(0, 20),
+      createdAt: Date.now(),
+      ttlSeconds,
+      revoked: false,
+    };
+    const event: WorkspaceEvent = {
+      id: crypto.randomUUID(),
+      kind: 'write',
+      message: `Generated a dynamic credential for role "${roleName}" (expires in ${ttlSeconds}s)`,
+      timestamp: Date.now(),
+    };
+    set((s) => ({ leases: [lease, ...s.leases], history: [event, ...s.history].slice(0, 20) }));
+    toast.success(`Dynamic credential issued — expires in ${ttlSeconds}s`);
+    syncToBackend(get);
+  },
+
+  revokeLease: (id) => {
+    const { leases, history } = get();
+    const lease = leases.find((l) => l.id === id);
+    if (!lease || lease.revoked) return;
+    const event: WorkspaceEvent = {
+      id: crypto.randomUUID(),
+      kind: 'write',
+      message: `Revoked dynamic credential for role "${lease.role}"`,
+      timestamp: Date.now(),
+    };
+    set({
+      leases: leases.map((l) => (l.id === id ? { ...l, revoked: true } : l)),
+      history: [event, ...history].slice(0, 20),
+    });
+    toast.info('Credential revoked');
+    syncToBackend(get);
+  },
+
   hydrate: (data) => {
     set({
       engines: data.engines ?? [],
       secrets: data.secrets ?? [],
       policies: data.policies ?? [],
       tokens: data.tokens ?? [],
+      leases: data.leases ?? [],
       history: data.history ?? [],
       accessCount: data.accessCount ?? 0,
       lastAccess: null,

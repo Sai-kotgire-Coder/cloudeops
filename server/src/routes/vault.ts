@@ -20,6 +20,7 @@ router.get('/', async (req: AuthRequest, res) => {
           secrets: [],
           policies: [],
           tokens: [],
+          leases: [],
           history: []
         }
       });
@@ -35,7 +36,7 @@ router.get('/', async (req: AuthRequest, res) => {
 // Update the user's Vault workspace
 router.patch('/', async (req: AuthRequest, res) => {
   try {
-    const { secretCount, accessCount, engines, secrets, policies, tokens, history } = req.body;
+    const { secretCount, accessCount, engines, secrets, policies, tokens, leases, history } = req.body;
 
     const workspace = await prisma.vaultWorkspace.upsert({
       where: { userId: req.userId! },
@@ -47,6 +48,7 @@ router.patch('/', async (req: AuthRequest, res) => {
         secrets: secrets ?? [],
         policies: policies ?? [],
         tokens: tokens ?? [],
+        leases: leases ?? [],
         history: history ?? []
       },
       update: {
@@ -56,6 +58,7 @@ router.patch('/', async (req: AuthRequest, res) => {
         ...(secrets !== undefined && { secrets }),
         ...(policies !== undefined && { policies }),
         ...(tokens !== undefined && { tokens }),
+        ...(leases !== undefined && { leases }),
         ...(history !== undefined && { history })
       }
     });

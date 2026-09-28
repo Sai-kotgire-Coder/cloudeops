@@ -5,6 +5,7 @@ import { useVaultStore } from '@/store/vaultStore';
 import { useLearningStore } from '@/store/learningStore';
 import { EnginesPanel } from '@/components/vault/EnginesPanel';
 import { SecretEditor } from '@/components/vault/SecretEditor';
+import { DynamicSecretsPanel } from '@/components/vault/DynamicSecretsPanel';
 import { PolicyEditor } from '@/components/vault/PolicyEditor';
 import { TokenAccessPanel } from '@/components/vault/TokenAccessPanel';
 import { LearningPanel } from '@/components/container/LearningPanel';
@@ -62,6 +63,7 @@ export default function VaultLabPage() {
             <div className="space-y-6">
               <EnginesPanel onLearnMore={openLearningPanel} />
               <SecretEditor onLearnMore={openLearningPanel} />
+              <DynamicSecretsPanel onLearnMore={openLearningPanel} />
             </div>
             <div className="space-y-6">
               <PolicyEditor onLearnMore={openLearningPanel} />
