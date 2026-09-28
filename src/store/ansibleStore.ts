@@ -131,6 +131,17 @@ export interface AnsibleTask {
   moduleId: string;
   name: string;
   params: Record<string, string | number>;
+  // Optional grouping label, mirroring AnsibleHost.group -- purely
+  // presentational (groups the flat playbook list under a role header),
+  // doesn't affect run order or targeting.
+  role?: string;
+  // A handler never runs in the main task sequence -- it only fires (once
+  // per host, even if notified by more than one task) when a non-handler
+  // task on that same host actually reports 'changed' AND lists this
+  // handler's name in its own `notify`. Real Ansible notifies by handler
+  // name, so this simulator does too rather than inventing task ids for it.
+  isHandler?: boolean;
+  notify?: string[];
 }
 
 export type TaskStatus = 'ok' | 'changed' | 'failed';
@@ -162,11 +173,22 @@ function paramsEqual(a: Record<string, string | number>, b: Record<string, strin
 
 function computeResults(inventory: AnsibleHost[], playbook: AnsibleTask[], hostState: HostState): TaskResult[] {
   const results: TaskResult[] = [];
+  const regularTasks = playbook.filter((t) => !t.isHandler);
+  const handlerTasks = playbook.filter((t) => t.isHandler);
+
   inventory.forEach((host) => {
-    playbook.forEach((task) => {
+    const notified = new Set<string>();
+    regularTasks.forEach((task) => {
       const applied = hostState[host.id]?.[task.id];
       const status: TaskStatus = !applied || !paramsEqual(applied, task.params) ? 'changed' : 'ok';
       results.push({ hostId: host.id, hostname: host.hostname, taskId: task.id, taskName: task.name, status });
+      if (status === 'changed') (task.notify ?? []).forEach((n) => notified.add(n));
+    });
+    handlerTasks.forEach((handler) => {
+      if (!notified.has(handler.name)) return;
+      const applied = hostState[host.id]?.[handler.id];
+      const status: TaskStatus = !applied || !paramsEqual(applied, handler.params) ? 'changed' : 'ok';
+      results.push({ hostId: host.id, hostname: host.hostname, taskId: handler.id, taskName: handler.name, status });
     });
   });
   return results;
@@ -188,7 +210,7 @@ interface AnsibleState {
 
   addHost: (hostname: string, group: string) => void;
   removeHost: (id: string) => void;
-  addTask: (moduleId: string, name: string) => void;
+  addTask: (moduleId: string, name: string, role?: string, isHandler?: boolean, notify?: string[]) => void;
   updateTaskParam: (id: string, key: string, value: string | number) => void;
   removeTask: (id: string) => void;
   dryRun: () => void;
@@ -243,7 +265,7 @@ export const useAnsibleStore = create<AnsibleState>()((set, get) => ({
     syncToBackend(get);
   },
 
-  addTask: (moduleId, name) => {
+  addTask: (moduleId, name, role, isHandler, notify) => {
     const def = getModuleDef(moduleId);
     if (!def) return;
     const task: AnsibleTask = {
@@ -251,9 +273,12 @@ export const useAnsibleStore = create<AnsibleState>()((set, get) => ({
       moduleId,
       name: name.trim() || def.label,
       params: { ...def.defaultParams },
+      role: role?.trim() || undefined,
+      isHandler: isHandler || undefined,
+      notify: notify && notify.length > 0 ? notify : undefined,
     };
     set((s) => ({ playbook: [...s.playbook, task], lastResults: null }));
-    toast.info(`Added task "${task.name}" — run --check to preview it`);
+    toast.info(isHandler ? `Added handler "${task.name}"` : `Added task "${task.name}" — run --check to preview it`);
     syncToBackend(get);
   },
 
@@ -315,8 +340,12 @@ export const useAnsibleStore = create<AnsibleState>()((set, get) => ({
 
     const newHostState: HostState = JSON.parse(JSON.stringify(hostState));
     const allResults: TaskResult[] = [];
+    const regularTasks = playbook.filter((t) => !t.isHandler);
+    const handlerTasks = playbook.filter((t) => t.isHandler);
+    // hostId -> set of handler names that fired on that host during this run
+    const notifiedByHost: Record<string, Set<string>> = {};
 
-    for (const task of playbook) {
+    for (const task of regularTasks) {
       set((s) => ({ runLog: [...s.runLog, '', `TASK [${task.name}] ${'*'.repeat(Math.max(1, 30 - task.name.length))}`] }));
       for (const host of inventory) {
         await sleep(200 + Math.random() * 150);
@@ -325,6 +354,30 @@ export const useAnsibleStore = create<AnsibleState>()((set, get) => ({
         if (!newHostState[host.id]) newHostState[host.id] = {};
         newHostState[host.id][task.id] = { ...task.params };
         allResults.push({ hostId: host.id, hostname: host.hostname, taskId: task.id, taskName: task.name, status });
+        if (status === 'changed' && task.notify && task.notify.length > 0) {
+          if (!notifiedByHost[host.id]) notifiedByHost[host.id] = new Set();
+          task.notify.forEach((n) => notifiedByHost[host.id].add(n));
+        }
+        set((s) => ({ runLog: [...s.runLog, `${status}: [${host.hostname}]`] }));
+      }
+    }
+
+    // Handlers run once, after every regular task, only on hosts that
+    // actually notified them -- real Ansible semantics: a handler notified
+    // three times by three different tasks on the same host still only
+    // runs once.
+    for (const handler of handlerTasks) {
+      const hostsToNotify = inventory.filter((h) => notifiedByHost[h.id]?.has(handler.name));
+      if (hostsToNotify.length === 0) continue;
+      await sleep(150);
+      set((s) => ({ runLog: [...s.runLog, '', `RUNNING HANDLER [${handler.name}] ${'*'.repeat(Math.max(1, 22 - handler.name.length))}`] }));
+      for (const host of hostsToNotify) {
+        await sleep(150 + Math.random() * 100);
+        const applied = newHostState[host.id]?.[handler.id];
+        const status: TaskStatus = !applied || !paramsEqual(applied, handler.params) ? 'changed' : 'ok';
+        if (!newHostState[host.id]) newHostState[host.id] = {};
+        newHostState[host.id][handler.id] = { ...handler.params };
+        allResults.push({ hostId: host.id, hostname: host.hostname, taskId: handler.id, taskName: handler.name, status });
         set((s) => ({ runLog: [...s.runLog, `${status}: [${host.hostname}]`] }));
       }
     }
@@ -400,10 +453,18 @@ export const useAnsibleStore = create<AnsibleState>()((set, get) => ({
   },
 
   hydrate: (data) => {
+    // A pre-existing backend bug used to default a brand-new workspace's
+    // hostState to `[]` instead of `{}` -- since JSON.stringify silently
+    // drops non-index string keys from an array, any converged state ever
+    // written into that shape was already lost the moment it was first
+    // synced back (this is why idempotency never actually worked). There's
+    // nothing recoverable in an array that hit this -- just normalize it to
+    // an empty object so the type is sound going forward.
+    const hostState = Array.isArray(data.hostState) ? {} : (data.hostState ?? {});
     set({
       inventory: data.inventory ?? [],
       playbook: data.playbook ?? [],
-      hostState: data.hostState ?? {},
+      hostState,
       history: data.history ?? [],
       runCount: data.runCount ?? 0,
       lastResults: null,

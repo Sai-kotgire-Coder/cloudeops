@@ -18,7 +18,7 @@ router.get('/', async (req: AuthRequest, res) => {
           userId: req.userId!,
           inventory: [],
           playbook: [],
-          hostState: [],
+          hostState: {},
           history: []
         }
       });
@@ -44,7 +44,7 @@ router.patch('/', async (req: AuthRequest, res) => {
         runCount: runCount || 0,
         inventory: inventory ?? [],
         playbook: playbook ?? [],
-        hostState: hostState ?? [],
+        hostState: hostState ?? {},
         history: history ?? []
       },
       update: {
