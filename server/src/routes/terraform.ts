@@ -16,8 +16,9 @@ router.get('/', async (req: AuthRequest, res) => {
       workspace = await prisma.terraformWorkspace.create({
         data: {
           userId: req.userId!,
-          config: [],
-          state: [],
+          config: { dev: [], prod: [] },
+          state: { dev: [], prod: [] },
+          variables: {},
           history: []
         }
       });
@@ -33,7 +34,7 @@ router.get('/', async (req: AuthRequest, res) => {
 // Update the user's Terraform workspace
 router.patch('/', async (req: AuthRequest, res) => {
   try {
-    const { resourceCount, appliedCount, config, state, history } = req.body;
+    const { resourceCount, appliedCount, config, state, variables, history } = req.body;
 
     const workspace = await prisma.terraformWorkspace.upsert({
       where: { userId: req.userId! },
@@ -41,8 +42,9 @@ router.patch('/', async (req: AuthRequest, res) => {
         userId: req.userId!,
         resourceCount: resourceCount || 0,
         appliedCount: appliedCount || 0,
-        config: config ?? [],
-        state: state ?? [],
+        config: config ?? { dev: [], prod: [] },
+        state: state ?? { dev: [], prod: [] },
+        variables: variables ?? {},
         history: history ?? []
       },
       update: {
@@ -50,6 +52,7 @@ router.patch('/', async (req: AuthRequest, res) => {
         ...(appliedCount !== undefined && { appliedCount }),
         ...(config !== undefined && { config }),
         ...(state !== undefined && { state }),
+        ...(variables !== undefined && { variables }),
         ...(history !== undefined && { history })
       }
     });

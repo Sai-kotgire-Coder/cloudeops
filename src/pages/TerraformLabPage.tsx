@@ -1,17 +1,19 @@
 import { useState } from 'react';
 import { FileCode, BookOpen, Boxes } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useTerraformStore } from '@/store/terraformStore';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useTerraformStore, type Workspace } from '@/store/terraformStore';
 import { useLearningStore } from '@/store/learningStore';
 import { ConfigEditor } from '@/components/terraform/ConfigEditor';
 import { PlanPanel } from '@/components/terraform/PlanPanel';
 import { StatePanel } from '@/components/terraform/StatePanel';
+import { VariablesPanel } from '@/components/terraform/VariablesPanel';
 import { LearningPanel } from '@/components/container/LearningPanel';
 import { ModuleLearningSection } from '@/components/learning/ModuleLearningSection';
 import type { LearningSectionId } from '@/data/dockerLearningContent';
 
 export default function TerraformLabPage() {
-  const { config, state, appliedCount } = useTerraformStore();
+  const { config, state, appliedCount, activeWorkspace, setActiveWorkspace } = useTerraformStore();
   const { openTopic } = useLearningStore();
   const [learningPanelOpen, setLearningPanelOpen] = useState(false);
   const [learningSectionId, setLearningSectionId] = useState<LearningSectionId | null>(null);
@@ -35,6 +37,16 @@ export default function TerraformLabPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          <Select value={activeWorkspace} onValueChange={(v) => setActiveWorkspace(v as Workspace)}>
+            <SelectTrigger className="w-28 h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="dev">Dev</SelectItem>
+              <SelectItem value="prod">Prod</SelectItem>
+            </SelectContent>
+          </Select>
+
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20">
             <Boxes className="w-4 h-4 text-primary" />
             <span className="font-mono font-bold text-sm">{state.length}</span>
@@ -56,6 +68,8 @@ export default function TerraformLabPage() {
       <div className="flex-1 overflow-auto p-3 sm:p-4 md:p-6">
         <div className="max-w-[1800px] mx-auto space-y-6">
           <ModuleLearningSection moduleId="terraform" moduleLabel="Terraform Lab" />
+
+          <VariablesPanel />
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <ConfigEditor onLearnMore={openLearningPanel} />

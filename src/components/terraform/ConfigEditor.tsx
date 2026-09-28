@@ -165,6 +165,11 @@ export const ConfigEditor = ({ onLearnMore }: ConfigEditorProps) => {
             No resource blocks yet — add one above to start writing your configuration.
           </p>
         )}
+        {config.length > 0 && (
+          <p className="text-[11px] text-gray-500">
+            Tip: type <code className="text-cyan-400">var.&lt;name&gt;</code> as any attribute's value to reference a variable defined above.
+          </p>
+        )}
         {config.map((resource) => {
           const def = getResourceDef(resource.typeId);
           return (

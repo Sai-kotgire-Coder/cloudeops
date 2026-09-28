@@ -264,6 +264,33 @@ export interface WorkspaceEvent {
   timestamp: number;
 }
 
+// Two independently-tracked environments, each with its own config/state/
+// plan -- applying in dev never touches prod. Deliberately just two, not an
+// open-ended list: teaches the real "isolated environments" concept without
+// needing a workspace-management UI (create/rename/delete) a beginner lab
+// doesn't need.
+export type Workspace = 'dev' | 'prod';
+
+const VAR_REF_PATTERN = /^var\.([A-Za-z0-9_]+)$/;
+
+// A resource attr can be a literal value, or a "var.<name>" reference to a
+// named variable -- resolved here at plan/apply time, same mental model as
+// real Terraform interpolating variables.tf into the final plan. An
+// unresolved reference (the variable was never set) is left as the literal
+// token so it's visibly wrong in the plan diff, rather than silently
+// disappearing.
+export function resolveAttrs(
+  attrs: Record<string, string | number>,
+  variables: Record<string, string | number>
+): Record<string, string | number> {
+  const resolved: Record<string, string | number> = {};
+  Object.entries(attrs).forEach(([key, value]) => {
+    const match = typeof value === 'string' ? value.match(VAR_REF_PATTERN) : null;
+    resolved[key] = match && variables[match[1]] !== undefined ? variables[match[1]] : value;
+  });
+  return resolved;
+}
+
 function diffAttrs(a: Record<string, string | number>, b: Record<string, string | number>): AttrChange[] {
   const changes: AttrChange[] = [];
   const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
@@ -273,19 +300,23 @@ function diffAttrs(a: Record<string, string | number>, b: Record<string, string 
   return changes;
 }
 
-function diff(config: TerraformResource[], state: TerraformResource[]): PlanAction[] {
+function diff(config: TerraformResource[], state: TerraformResource[], variables: Record<string, string | number>): PlanAction[] {
   const stateById = new Map(state.map((r) => [r.id, r]));
   const configById = new Map(config.map((r) => [r.id, r]));
   const actions: PlanAction[] = [];
 
   config.forEach((resource) => {
+    // Diff (and, on apply, state) always compares/stores RESOLVED values --
+    // real `terraform plan` shows the interpolated value, never the literal
+    // "var.x" token, and state is always a resolved snapshot of reality.
+    const resolved = { ...resource, attrs: resolveAttrs(resource.attrs, variables) };
     const existing = stateById.get(resource.id);
     if (!existing) {
-      actions.push({ kind: 'create', resource, changes: diffAttrs(resource.attrs, {}) });
+      actions.push({ kind: 'create', resource: resolved, changes: diffAttrs(resolved.attrs, {}) });
     } else {
-      const changes = diffAttrs(resource.attrs, existing.attrs);
+      const changes = diffAttrs(resolved.attrs, existing.attrs);
       if (changes.length > 0) {
-        actions.push({ kind: 'update', resource, changes });
+        actions.push({ kind: 'update', resource: resolved, changes });
       }
     }
   });
@@ -300,14 +331,33 @@ function diff(config: TerraformResource[], state: TerraformResource[]): PlanActi
 }
 
 interface TerraformState {
+  // Mirror the active workspace's config/state/plan -- ConfigEditor,
+  // PlanPanel, and StatePanel all read these three fields exactly as before
+  // multi-workspace support existed, so none of them needed to change.
+  // Every action below updates both the mirror AND the underlying
+  // configs/states/plans record; setActiveWorkspace re-derives the mirror
+  // from whichever workspace becomes active.
   config: TerraformResource[];
   state: TerraformResource[];
   plan: PlanAction[] | null;
+
+  configs: Record<Workspace, TerraformResource[]>;
+  states: Record<Workspace, TerraformResource[]>;
+  plans: Record<Workspace, PlanAction[] | null>;
+  activeWorkspace: Workspace;
+  // Named values a resource attr can reference as "var.<name>" -- shared
+  // across both workspaces, same as referencing the same variables.tf from
+  // either environment.
+  variables: Record<string, string | number>;
+
   history: WorkspaceEvent[];
   appliedCount: number;
   isApplying: boolean;
   applyLog: string[];
 
+  setActiveWorkspace: (workspace: Workspace) => void;
+  setVariable: (name: string, value: string | number) => void;
+  removeVariable: (name: string) => void;
   addResource: (typeId: string, name: string, provider?: Provider) => void;
   updateResourceAttr: (id: string, key: string, value: string | number) => void;
   removeResource: (id: string) => void;
@@ -315,17 +365,27 @@ interface TerraformState {
   applyPlan: () => Promise<void>;
   destroyAll: () => void;
   simulateDrift: (id: string) => void;
-  hydrate: (data: { config?: TerraformResource[]; state?: TerraformResource[]; history?: WorkspaceEvent[]; appliedCount?: number }) => void;
+  hydrate: (data: {
+    // Older rows (persisted before multi-workspace support shipped) hold a
+    // flat array here; hydrate() below migrates that shape into
+    // { dev: [...], prod: [] } rather than needing a data migration.
+    config?: TerraformResource[] | Record<Workspace, TerraformResource[]>;
+    state?: TerraformResource[] | Record<Workspace, TerraformResource[]>;
+    variables?: Record<string, string | number>;
+    history?: WorkspaceEvent[];
+    appliedCount?: number;
+  }) => void;
 }
 
 function syncToBackend(get: () => TerraformState) {
-  const { config, state, history, appliedCount } = get();
+  const { configs, states, variables, history, appliedCount } = get();
   apiClient
     .updateTerraformWorkspace({
-      resourceCount: config.length,
+      resourceCount: configs.dev.length + configs.prod.length,
       appliedCount,
-      config,
-      state,
+      config: configs,
+      state: states,
+      variables,
       history,
     })
     .catch((err) => console.error('Failed to sync terraform workspace:', err));
@@ -339,45 +399,93 @@ export const useTerraformStore = create<TerraformState>()((set, get) => ({
   config: [],
   state: [],
   plan: null,
+  configs: { dev: [], prod: [] },
+  states: { dev: [], prod: [] },
+  plans: { dev: null, prod: null },
+  activeWorkspace: 'dev',
+  variables: {},
   history: [],
   appliedCount: 0,
   isApplying: false,
   applyLog: [],
 
+  setActiveWorkspace: (workspace) => {
+    set((s) => ({
+      activeWorkspace: workspace,
+      config: s.configs[workspace],
+      state: s.states[workspace],
+      plan: s.plans[workspace],
+      applyLog: [],
+    }));
+  },
+
+  setVariable: (name, value) => {
+    const key = name.trim();
+    if (!key) return;
+    set((s) => ({
+      variables: { ...s.variables, [key]: value },
+      // A variable change can affect either workspace's resolved diff --
+      // clear both plans rather than just the active one.
+      plans: { dev: null, prod: null },
+      plan: null,
+    }));
+    toast.success(`Set var.${key}`);
+    syncToBackend(get);
+  },
+
+  removeVariable: (name) => {
+    set((s) => {
+      const nextVariables = { ...s.variables };
+      delete nextVariables[name];
+      return { variables: nextVariables, plans: { dev: null, prod: null }, plan: null };
+    });
+    syncToBackend(get);
+  },
+
   addResource: (typeId, name, provider) => {
     const def = getResourceDef(typeId);
     if (!def) return;
+    const ws = get().activeWorkspace;
     const resource: TerraformResource = {
       id: crypto.randomUUID(),
       typeId,
       category: def.category,
       provider: def.category === 'cloud_infra' ? (provider ?? 'aws') : undefined,
-      name: name.trim() || `${typeId}_${get().config.length + 1}`,
+      name: name.trim() || `${typeId}_${get().configs[ws].length + 1}`,
       attrs: { ...def.defaultAttrs },
     };
-    set((s) => ({ config: [...s.config, resource], plan: null }));
+    set((s) => {
+      const nextConfig = [...s.configs[ws], resource];
+      return { configs: { ...s.configs, [ws]: nextConfig }, plans: { ...s.plans, [ws]: null }, config: nextConfig, plan: null };
+    });
     toast.info(`Added resource block "${resource.name}" — run Plan to see the effect`);
     syncToBackend(get);
   },
 
   updateResourceAttr: (id, key, value) => {
-    set((s) => ({
-      config: s.config.map((r) => (r.id === id ? { ...r, attrs: { ...r.attrs, [key]: value } } : r)),
-      plan: null,
-    }));
+    const ws = get().activeWorkspace;
+    set((s) => {
+      const nextConfig = s.configs[ws].map((r) => (r.id === id ? { ...r, attrs: { ...r.attrs, [key]: value } } : r));
+      return { configs: { ...s.configs, [ws]: nextConfig }, plans: { ...s.plans, [ws]: null }, config: nextConfig, plan: null };
+    });
     syncToBackend(get);
   },
 
   removeResource: (id) => {
-    set((s) => ({ config: s.config.filter((r) => r.id !== id), plan: null }));
+    const ws = get().activeWorkspace;
+    set((s) => {
+      const nextConfig = s.configs[ws].filter((r) => r.id !== id);
+      return { configs: { ...s.configs, [ws]: nextConfig }, plans: { ...s.plans, [ws]: null }, config: nextConfig, plan: null };
+    });
     toast.info('Removed from config — run Plan to see the destroy it will trigger');
     syncToBackend(get);
   },
 
   runPlan: () => {
-    const { config, state } = get();
-    const actions = diff(config, state);
-    set({ plan: actions });
+    const ws = get().activeWorkspace;
+    const { configs, states, variables } = get();
+    const actions = diff(configs[ws], states[ws], variables);
+    set((s) => ({ plans: { ...s.plans, [ws]: actions }, plan: actions }));
     if (actions.length === 0) {
       toast.success('No changes. Infrastructure matches the configuration.');
     } else {
@@ -389,7 +497,9 @@ export const useTerraformStore = create<TerraformState>()((set, get) => ({
   },
 
   applyPlan: async () => {
-    const { plan, config, history, appliedCount } = get();
+    const ws = get().activeWorkspace;
+    const { plans, configs, variables, history, appliedCount } = get();
+    const plan = plans[ws];
     if (!plan) {
       toast.error('Run Plan before Apply');
       return;
@@ -422,40 +532,56 @@ export const useTerraformStore = create<TerraformState>()((set, get) => ({
     const event: WorkspaceEvent = {
       id: crypto.randomUUID(),
       kind: 'apply',
-      message: `Apply complete: ${creates} added, ${updates} changed, ${destroys} destroyed`,
+      message: `[${ws}] Apply complete: ${creates} added, ${updates} changed, ${destroys} destroyed`,
       timestamp: Date.now(),
     };
-    set({
-      state: config.map((r) => ({ ...r, attrs: { ...r.attrs } })),
+    // State always stores RESOLVED values, same as real Terraform's tfstate
+    // never contains a "var.x" token -- only ever the concrete value that
+    // was actually applied.
+    const nextState = configs[ws].map((r) => ({ ...r, attrs: resolveAttrs(r.attrs, variables) }));
+    set((s) => ({
+      states: { ...s.states, [ws]: nextState },
+      plans: { ...s.plans, [ws]: null },
+      state: nextState,
       plan: null,
       isApplying: false,
       history: [event, ...history].slice(0, 20),
       appliedCount: appliedCount + 1,
-    });
+    }));
     toast.success(event.message);
     syncToBackend(get);
   },
 
   destroyAll: () => {
-    const { state, history } = get();
-    if (state.length === 0) {
+    const ws = get().activeWorkspace;
+    const { states, history } = get();
+    if (states[ws].length === 0) {
       toast.info('No applied infrastructure to destroy');
       return;
     }
+    const count = states[ws].length;
     const event: WorkspaceEvent = {
       id: crypto.randomUUID(),
       kind: 'destroy',
-      message: `Destroyed ${state.length} resource${state.length === 1 ? '' : 's'}`,
+      message: `[${ws}] Destroyed ${count} resource${count === 1 ? '' : 's'}`,
       timestamp: Date.now(),
     };
-    set({ state: [], plan: null, applyLog: [], history: [event, ...history].slice(0, 20) });
+    set((s) => ({
+      states: { ...s.states, [ws]: [] },
+      plans: { ...s.plans, [ws]: null },
+      state: [],
+      plan: null,
+      applyLog: [],
+      history: [event, ...history].slice(0, 20),
+    }));
     toast.success(event.message);
     syncToBackend(get);
   },
 
   simulateDrift: (id) => {
-    const { state, history } = get();
-    const target = state.find((r) => r.id === id);
+    const ws = get().activeWorkspace;
+    const { states, history } = get();
+    const target = states[ws].find((r) => r.id === id);
     if (!target) return;
     const keys = Object.keys(target.attrs);
     if (keys.length === 0) return;
@@ -466,25 +592,50 @@ export const useTerraformStore = create<TerraformState>()((set, get) => ({
     const event: WorkspaceEvent = {
       id: crypto.randomUUID(),
       kind: 'drift',
-      message: `Detected drift on "${target.name}": ${key} changed outside Terraform`,
+      message: `[${ws}] Detected drift on "${target.name}": ${key} changed outside Terraform`,
       timestamp: Date.now(),
     };
-    set({
-      state: state.map((r) => (r.id === id ? { ...r, attrs: { ...r.attrs, [key]: driftedValue } } : r)),
-      history: [event, ...history].slice(0, 20),
-      plan: null,
+    set((s) => {
+      const nextState = s.states[ws].map((r) => (r.id === id ? { ...r, attrs: { ...r.attrs, [key]: driftedValue } } : r));
+      return {
+        states: { ...s.states, [ws]: nextState },
+        state: nextState,
+        history: [event, ...history].slice(0, 20),
+        plans: { ...s.plans, [ws]: null },
+        plan: null,
+      };
     });
     toast.error(`Drift detected on "${target.name}" — run Plan to see what changed`);
     syncToBackend(get);
   },
 
   hydrate: (data) => {
+    const rawConfig = data.config;
+    const rawState = data.state;
+
+    const configs: Record<Workspace, TerraformResource[]> = Array.isArray(rawConfig)
+      ? { dev: rawConfig, prod: [] }
+      : rawConfig
+        ? { dev: rawConfig.dev ?? [], prod: rawConfig.prod ?? [] }
+        : { dev: [], prod: [] };
+
+    const states: Record<Workspace, TerraformResource[]> = Array.isArray(rawState)
+      ? { dev: rawState, prod: [] }
+      : rawState
+        ? { dev: rawState.dev ?? [], prod: rawState.prod ?? [] }
+        : { dev: [], prod: [] };
+
     set({
-      config: data.config ?? [],
-      state: data.state ?? [],
+      configs,
+      states,
+      plans: { dev: null, prod: null },
+      variables: data.variables ?? {},
+      activeWorkspace: 'dev',
+      config: configs.dev,
+      state: states.dev,
+      plan: null,
       history: data.history ?? [],
       appliedCount: data.appliedCount ?? 0,
-      plan: null,
       applyLog: [],
     });
   },
