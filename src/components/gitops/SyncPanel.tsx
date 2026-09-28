@@ -1,7 +1,7 @@
-import { RefreshCw, Zap, History, BookOpen, CheckCircle2, AlertCircle, HelpCircle, Loader2 } from 'lucide-react';
+import { RefreshCw, Zap, History, BookOpen, CheckCircle2, AlertCircle, HelpCircle, Loader2, ArrowRightCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useGitOpsStore, getSyncStatus, latestCommit } from '@/store/gitopsStore';
+import { useGitOpsStore, getSyncStatus, latestCommit, ENVIRONMENT_ORDER } from '@/store/gitopsStore';
 import { useGameStore } from '@/store/gameStore';
 import type { LearningSectionId } from '@/data/dockerLearningContent';
 
@@ -9,6 +9,8 @@ interface SyncPanelProps {
   appId: string | null;
   onLearnMore: (sectionId: LearningSectionId) => void;
 }
+
+const ENV_LABEL = { dev: 'Dev', staging: 'Staging', prod: 'Prod' } as const;
 
 const STATUS_STYLE = {
   Synced: { icon: CheckCircle2, className: 'bg-green-500/10 text-green-400 border-green-500/30' },
@@ -18,7 +20,7 @@ const STATUS_STYLE = {
 } as const;
 
 export const SyncPanel = ({ appId, onLearnMore }: SyncPanelProps) => {
-  const { apps, commits, history, sync, simulateDrift } = useGitOpsStore();
+  const { apps, commits, history, sync, simulateDrift, promote } = useGitOpsStore();
   // getSyncStatus reads gameStore.getState() internally, so this component
   // must also re-render whenever gameStore's applications change (e.g. a
   // manual "kubectl scale" via Simulate Drift, or the self-heal reconciler).
@@ -100,6 +102,26 @@ export const SyncPanel = ({ appId, onLearnMore }: SyncPanelProps) => {
                     Simulate Drift
                   </Button>
                 </div>
+                {app.environment && app.pipelineGroup && (() => {
+                  const nextEnv = ENVIRONMENT_ORDER[ENVIRONMENT_ORDER.indexOf(app.environment!) + 1];
+                  if (!nextEnv) {
+                    return <p className="text-[11px] text-gray-500 italic">This is the final stage ({ENV_LABEL[app.environment]}) of the "{app.pipelineGroup}" pipeline.</p>;
+                  }
+                  const target = apps.find((a) => a.pipelineGroup === app.pipelineGroup && a.environment === nextEnv);
+                  return (
+                    <Button
+                      onClick={() => promote(app.id)}
+                      disabled={status !== 'Synced' || !target}
+                      variant="outline"
+                      size="sm"
+                      className="gap-2 w-full border-purple-500/40 text-purple-300 hover:bg-purple-500/10"
+                      title={!target ? `No ${ENV_LABEL[nextEnv]} Application in this pipeline yet` : undefined}
+                    >
+                      <ArrowRightCircle className="w-3.5 h-3.5" />
+                      Promote to {ENV_LABEL[nextEnv]}
+                    </Button>
+                  );
+                })()}
                 {!app.autoSync && (
                   <p className="text-[11px] text-gray-500 italic">
                     Auto-Sync is off for this app — new commits wait here until you click Sync Now.

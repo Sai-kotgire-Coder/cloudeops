@@ -3,6 +3,14 @@ import { toast } from 'sonner';
 import { apiClient } from '@/lib/apiClient';
 import { useGameStore } from '@/store/gameStore';
 
+export type Environment = 'dev' | 'staging' | 'prod';
+
+// dev -> staging -> prod, in promotion order. A GitOps Application without
+// an `environment` (every app created before this feature shipped) is
+// treated as a standalone, non-promotable app -- promotion only applies to
+// apps that opted into a `pipelineGroup`.
+export const ENVIRONMENT_ORDER: Environment[] = ['dev', 'staging', 'prod'];
+
 export interface GitOpsApp {
   id: string;
   name: string;
@@ -17,6 +25,13 @@ export interface GitOpsApp {
   // to -- reconcileTick keeps retrying until it lands, same as a real
   // controller shows "Progressing" and keeps reconciling.
   pendingSync: boolean;
+  // Optional multi-environment promotion pipeline: apps that share the same
+  // `pipelineGroup` (a user-chosen label, e.g. "checkout-service") and each
+  // have a distinct `environment` represent the same conceptual service
+  // promoted across dev -> staging -> prod, each with its own destination
+  // Application and independent sync status.
+  environment?: Environment;
+  pipelineGroup?: string;
 }
 
 export interface GitCommit {
@@ -64,13 +79,14 @@ interface GitOpsState {
   history: WorkspaceEvent[];
   syncCount: number;
 
-  createApp: (name: string, repoUrl: string, path: string, destinationAppId: string, autoSync: boolean, selfHeal: boolean) => void;
+  createApp: (name: string, repoUrl: string, path: string, destinationAppId: string, autoSync: boolean, selfHeal: boolean, environment?: Environment, pipelineGroup?: string) => void;
   removeApp: (id: string) => void;
   toggleAutoSync: (id: string) => void;
   toggleSelfHeal: (id: string) => void;
   commit: (appId: string, message: string, version: string, replicas: number) => void;
   sync: (appId: string) => void;
   simulateDrift: (appId: string) => void;
+  promote: (fromAppId: string) => void;
   reconcileTick: () => void;
   hydrate: (data: { apps?: GitOpsApp[]; commits?: GitCommit[]; history?: WorkspaceEvent[]; syncCount?: number }) => void;
 }
@@ -119,7 +135,7 @@ export const useGitOpsStore = create<GitOpsState>()((set, get) => ({
   history: [],
   syncCount: 0,
 
-  createApp: (name, repoUrl, path, destinationAppId, autoSync, selfHeal) => {
+  createApp: (name, repoUrl, path, destinationAppId, autoSync, selfHeal, environment, pipelineGroup) => {
     const app: GitOpsApp = {
       id: crypto.randomUUID(),
       name: name.trim() || `app-${get().apps.length + 1}`,
@@ -130,6 +146,8 @@ export const useGitOpsStore = create<GitOpsState>()((set, get) => ({
       autoSync,
       selfHeal,
       pendingSync: false,
+      environment,
+      pipelineGroup: pipelineGroup?.trim() || undefined,
     };
     set((s) => ({ apps: [...s.apps, app] }));
     toast.success(`GitOps Application "${app.name}" created`);
@@ -247,6 +265,48 @@ export const useGitOpsStore = create<GitOpsState>()((set, get) => ({
     set({ history: [event, ...history].slice(0, 30) });
     toast.error(`Drift on "${app.name}" -- live replicas no longer match Git`);
     syncToBackend(get);
+  },
+
+  // Carries the source stage's latest commit forward onto the next stage in
+  // its pipeline (dev -> staging -> prod) as a brand-new commit -- reuses
+  // `commit()` verbatim (including its own autoSync-triggered `sync()`), so
+  // this doesn't need any new reconciliation path or touch `syncCount`'s
+  // existing increment semantics at all.
+  promote: (fromAppId) => {
+    const { apps, commits } = get();
+    const fromApp = apps.find((a) => a.id === fromAppId);
+    if (!fromApp) return;
+    if (!fromApp.environment || !fromApp.pipelineGroup) {
+      toast.error('This Application has no pipeline group -- promotion needs a dev/staging/prod chain.');
+      return;
+    }
+
+    const currentIdx = ENVIRONMENT_ORDER.indexOf(fromApp.environment);
+    const nextEnv = ENVIRONMENT_ORDER[currentIdx + 1];
+    if (!nextEnv) {
+      toast.error(`${fromApp.name} is already at the final stage (prod).`);
+      return;
+    }
+
+    const toApp = apps.find((a) => a.pipelineGroup === fromApp.pipelineGroup && a.environment === nextEnv);
+    if (!toApp) {
+      toast.error(`No "${nextEnv}" Application found in the "${fromApp.pipelineGroup}" pipeline yet.`);
+      return;
+    }
+
+    const desired = latestCommit(commits, fromApp.id);
+    if (!desired) {
+      toast.error('Nothing to promote -- commit a change on this stage first.');
+      return;
+    }
+
+    if (getSyncStatus(fromApp, commits) !== 'Synced') {
+      toast.error(`${fromApp.name} must be Synced before promoting what's running there.`);
+      return;
+    }
+
+    get().commit(toApp.id, `Promoted from ${fromApp.environment}: ${desired.message}`, desired.version, desired.replicas);
+    toast.success(`Promoted ${desired.version} from ${fromApp.environment} to ${nextEnv}`);
   },
 
   // Called on an interval by GitOpsReconciler (mounted globally) -- this is

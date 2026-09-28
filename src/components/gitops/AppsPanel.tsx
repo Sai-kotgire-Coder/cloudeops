@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useGitOpsStore } from '@/store/gitopsStore';
+import { useGitOpsStore, type Environment } from '@/store/gitopsStore';
 import { useGameStore } from '@/store/gameStore';
 import type { LearningSectionId } from '@/data/dockerLearningContent';
 
@@ -14,6 +14,13 @@ interface AppsPanelProps {
   onLearnMore: (sectionId: LearningSectionId) => void;
 }
 
+const ENV_LABEL: Record<Environment, string> = { dev: 'Dev', staging: 'Staging', prod: 'Prod' };
+const ENV_BADGE_CLASS: Record<Environment, string> = {
+  dev: 'text-sky-300 bg-sky-500/10 border-sky-500/30',
+  staging: 'text-amber-300 bg-amber-500/10 border-amber-500/30',
+  prod: 'text-red-300 bg-red-500/10 border-red-500/30',
+};
+
 export const AppsPanel = ({ selectedAppId, onSelectApp, onLearnMore }: AppsPanelProps) => {
   const { apps, createApp, removeApp, toggleAutoSync, toggleSelfHeal } = useGitOpsStore();
   const applications = useGameStore((s) => s.applications);
@@ -22,18 +29,26 @@ export const AppsPanel = ({ selectedAppId, onSelectApp, onLearnMore }: AppsPanel
   const [repoUrl, setRepoUrl] = useState('');
   const [path, setPath] = useState('');
   const [destinationAppId, setDestinationAppId] = useState('');
+  const [environment, setEnvironment] = useState<Environment | 'none'>('none');
+  const [pipelineGroup, setPipelineGroup] = useState('');
 
   const linkedAppIds = new Set(apps.map((a) => a.destinationAppId));
   const linkableApps = applications.filter((a) => !linkedAppIds.has(a.id));
 
   const handleCreate = () => {
     if (!destinationAppId) return;
-    createApp(name, repoUrl, path, destinationAppId, true, false);
+    createApp(
+      name, repoUrl, path, destinationAppId, true, false,
+      environment === 'none' ? undefined : environment,
+      environment === 'none' ? undefined : pipelineGroup
+    );
     onSelectApp(destinationAppId);
     setName('');
     setRepoUrl('');
     setPath('');
     setDestinationAppId('');
+    setEnvironment('none');
+    setPipelineGroup('');
   };
 
   return (
@@ -98,6 +113,32 @@ export const AppsPanel = ({ selectedAppId, onSelectApp, onLearnMore }: AppsPanel
               onChange={(e) => setPath(e.target.value)}
               className="bg-[#1e293b] border-gray-700 text-white"
             />
+            <div className="flex gap-2">
+              <Select value={environment} onValueChange={(v) => setEnvironment(v as Environment | 'none')}>
+                <SelectTrigger className="bg-[#1e293b] border-gray-700 text-white w-36 shrink-0">
+                  <SelectValue placeholder="Environment" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No pipeline</SelectItem>
+                  <SelectItem value="dev">Dev</SelectItem>
+                  <SelectItem value="staging">Staging</SelectItem>
+                  <SelectItem value="prod">Prod</SelectItem>
+                </SelectContent>
+              </Select>
+              {environment !== 'none' && (
+                <Input
+                  placeholder="Pipeline group (e.g. checkout-service)"
+                  value={pipelineGroup}
+                  onChange={(e) => setPipelineGroup(e.target.value)}
+                  className="bg-[#1e293b] border-gray-700 text-white flex-1"
+                />
+              )}
+            </div>
+            {environment !== 'none' && (
+              <p className="text-[11px] text-gray-500">
+                Create one GitOps Application per stage with the same pipeline group (e.g. "checkout-service" for dev, staging, and prod) to promote between them.
+              </p>
+            )}
             <Button onClick={handleCreate} disabled={!destinationAppId} className="gap-2 w-full">
               <Plus className="w-4 h-4" />
               Create GitOps Application
@@ -128,12 +169,20 @@ export const AppsPanel = ({ selectedAppId, onSelectApp, onLearnMore }: AppsPanel
             >
               <div className="flex items-center justify-between">
                 <div className="min-w-0">
-                  <p className="font-mono text-sm text-white truncate">{app.name}</p>
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <p className="font-mono text-sm text-white truncate">{app.name}</p>
+                    {app.environment && (
+                      <span className={`text-[10px] font-semibold uppercase tracking-wider border rounded px-1.5 py-0.5 shrink-0 ${ENV_BADGE_CLASS[app.environment]}`}>
+                        {ENV_LABEL[app.environment]}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-[11px] text-gray-500 truncate">
                     {app.repoUrl} @ {app.targetRevision} · {app.path}
                   </p>
                   <p className="text-[11px] text-gray-500">
                     → deploys to <span className="text-cyan-400">{destApp?.name ?? 'unknown app'}</span>
+                    {app.pipelineGroup && <> · pipeline <span className="text-purple-300">{app.pipelineGroup}</span></>}
                   </p>
                 </div>
                 <button
