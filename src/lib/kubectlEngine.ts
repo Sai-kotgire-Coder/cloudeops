@@ -158,6 +158,49 @@ function formatNamespacesTable(): string {
   return [header, ...rows].join('\n');
 }
 
+// ConfigMaps/Secrets/Ingress are synthetic, derived read-only listings, same
+// as Services/Namespaces above -- one of each per real Application, with no
+// separate backing state to author/mutate. That's enough to teach the
+// vocabulary and CLI surface (get/describe) without inventing a whole new
+// data model these simulated resources would need real CRUD against.
+function configMapNameFor(appName: string): string {
+  return `${toK8sName(appName)}-config`;
+}
+
+function secretNameFor(appName: string): string {
+  return `${toK8sName(appName)}-secret`;
+}
+
+function ingressNameFor(appName: string): string {
+  return `${toK8sName(appName)}-ingress`;
+}
+
+function formatConfigMapsTable(): string {
+  const { applications } = useGameStore.getState();
+  if (applications.length === 0) return 'No resources found in default namespace.';
+  const header = padCols(['NAME', 'DATA', 'AGE'], [30, 6, 6]);
+  const rows = applications.map((a) => padCols([configMapNameFor(a.name), '3', '2d'], [30, 6, 6]));
+  return [header, ...rows].join('\n');
+}
+
+function formatSecretsTable(): string {
+  const { applications } = useGameStore.getState();
+  if (applications.length === 0) return 'No resources found in default namespace.';
+  const header = padCols(['NAME', 'TYPE', 'DATA', 'AGE'], [30, 12, 6, 6]);
+  const rows = applications.map((a) => padCols([secretNameFor(a.name), 'Opaque', '2', '2d'], [30, 12, 6, 6]));
+  return [header, ...rows].join('\n');
+}
+
+function formatIngressTable(): string {
+  const { applications } = useGameStore.getState();
+  if (applications.length === 0) return 'No resources found in default namespace.';
+  const header = padCols(['NAME', 'CLASS', 'HOSTS', 'ADDRESS', 'PORTS', 'AGE'], [25, 8, 25, 15, 6, 6]);
+  const rows = applications.map((a, i) =>
+    padCols([ingressNameFor(a.name), 'nginx', `${toK8sName(a.name)}.example.com`, `203.0.113.${10 + i}`, '80', '2d'], [25, 8, 25, 15, 6, 6])
+  );
+  return [header, ...rows].join('\n');
+}
+
 // ============================================================================
 // COMMANDS
 // ============================================================================
@@ -222,6 +265,39 @@ export const kubectlCommands: CommandDefinition[] = [
       type: 'success',
       output: formatNamespacesTable(),
       learningTip: '🗂️ Namespaces partition one cluster into isolated virtual clusters -- commonly one per team or environment (dev/staging/prod).',
+      timestamp: Date.now(),
+    }),
+  },
+  {
+    name: 'get configmaps', operation: 'get',
+    description: 'Lists ConfigMaps', usage: 'kubectl get configmaps',
+    examples: ['kubectl get configmaps', 'kubectl get cm'],
+    handler: () => ({
+      type: 'success',
+      output: formatConfigMapsTable(),
+      learningTip: '🗂️ A ConfigMap holds non-sensitive configuration as key-value pairs, injected into pods as env vars or mounted files -- keeping config separate from the container image itself.',
+      timestamp: Date.now(),
+    }),
+  },
+  {
+    name: 'get secrets', operation: 'get',
+    description: 'Lists Secrets', usage: 'kubectl get secrets',
+    examples: ['kubectl get secrets'],
+    handler: () => ({
+      type: 'success',
+      output: formatSecretsTable(),
+      learningTip: '🔒 A Secret is shaped just like a ConfigMap, but real kubectl never prints its actual values in a listing -- only key names and byte sizes. Reading a specific value takes an extra deliberate step (base64-decoding one key), which is exactly the point.',
+      timestamp: Date.now(),
+    }),
+  },
+  {
+    name: 'get ingress', operation: 'get',
+    description: 'Lists Ingress resources', usage: 'kubectl get ingress',
+    examples: ['kubectl get ingress', 'kubectl get ing'],
+    handler: () => ({
+      type: 'success',
+      output: formatIngressTable(),
+      learningTip: '🌐 Ingress routes external HTTP(S) traffic into the cluster based on hostname/path rules, forwarding to a Service -- it\'s the layer that actually terminates traffic from outside, sitting in front of one or more Services.',
       timestamp: Date.now(),
     }),
   },
@@ -305,6 +381,87 @@ Allocated resources:
   cpu:     ${inst.cpu.toFixed(1)}%
   memory:  ${inst.memory.toFixed(1)}%
 Non-terminated Pods: ${inst.pods.length}`;
+      return { type: 'success', output, timestamp: Date.now() };
+    },
+  },
+  {
+    name: 'describe configmap', operation: 'describe',
+    description: 'Shows detailed information about a ConfigMap', usage: 'kubectl describe configmap <name>',
+    examples: ['kubectl describe configmap web-config'],
+    handler: (parsed) => {
+      const name = resolveResourceName(parsed.rawArgs, 1);
+      const { applications } = useGameStore.getState();
+      const app = applications.find((a) => configMapNameFor(a.name) === name);
+      if (!name || !app) {
+        return { type: 'error', output: `Error from server (NotFound): configmaps "${name ?? ''}" not found`, timestamp: Date.now() };
+      }
+      const output = `Name:         ${name}
+Namespace:    default
+
+Data
+====
+APP_ENV:
+----
+production
+LOG_LEVEL:
+----
+info
+MAX_CONNECTIONS:
+----
+100
+
+Events:  <none>`;
+      return { type: 'success', output, timestamp: Date.now() };
+    },
+  },
+  {
+    name: 'describe secret', operation: 'describe',
+    description: 'Shows detailed information about a Secret (values hidden)', usage: 'kubectl describe secret <name>',
+    examples: ['kubectl describe secret web-secret'],
+    handler: (parsed) => {
+      const name = resolveResourceName(parsed.rawArgs, 1);
+      const { applications } = useGameStore.getState();
+      const app = applications.find((a) => secretNameFor(a.name) === name);
+      if (!name || !app) {
+        return { type: 'error', output: `Error from server (NotFound): secrets "${name ?? ''}" not found`, timestamp: Date.now() };
+      }
+      const output = `Name:         ${name}
+Namespace:    default
+Type:         Opaque
+
+Data
+====
+DB_PASSWORD:  18 bytes
+API_KEY:      32 bytes`;
+      return {
+        type: 'success',
+        output,
+        learningTip: '🔒 Notice describe never shows the actual values -- just key names and sizes. That\'s real kubectl behavior, not this simulator being cautious: `kubectl get secret -o jsonpath` and a manual base64-decode is what it actually takes to read one.',
+        timestamp: Date.now(),
+      };
+    },
+  },
+  {
+    name: 'describe ingress', operation: 'describe',
+    description: 'Shows detailed information about an Ingress', usage: 'kubectl describe ingress <name>',
+    examples: ['kubectl describe ingress web-ingress'],
+    handler: (parsed) => {
+      const name = resolveResourceName(parsed.rawArgs, 1);
+      const { applications } = useGameStore.getState();
+      const app = applications.find((a) => ingressNameFor(a.name) === name);
+      if (!name || !app) {
+        return { type: 'error', output: `Error from server (NotFound): ingresses.networking.k8s.io "${name ?? ''}" not found`, timestamp: Date.now() };
+      }
+      const host = `${toK8sName(app.name)}.example.com`;
+      const output = `Name:             ${name}
+Namespace:        default
+Address:          203.0.113.10
+Default backend:  <default>
+Rules:
+  Host          Path  Backends
+  ----          ----  --------
+  ${host}   /     ${toK8sName(app.name)}-svc:${app.port ?? 80}
+Events:  <none>`;
       return { type: 'success', output, timestamp: Date.now() };
     },
   },
